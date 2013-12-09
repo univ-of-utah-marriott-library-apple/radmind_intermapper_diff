@@ -1,0 +1,37 @@
+CHANGELOG
+
+1.4.0 - December 2, 2013
+	* Modified output
+	* Added simple output
+
+1.4.1 - December 2, 2013
+	* Fixed formatting
+	* Decided to keep a changelog
+
+1.4.2 - December 3, 2013
+	* Added progress bars for positive disparity
+
+1.4.3 - December 3, 2013
+	* Moved to arrays of integer indeces for disparity
+
+1.4.4 - December 3, 2013
+	* Prevented listing of duplicates
+
+1.5.0 - December 4, 2013
+	* Added reverse DNS search for hostname lookup
+	* Bug fixes
+
+1.5.1 - December 4, 2013
+	* Removed unnecessary lines and variables
+	* Changed some output formatting
+
+1.6.0 - December 4, 2013
+	* Added working file output
+	* Updated progress indicator
+
+1.6.1 - December 5, 2013
+	* Added colorized output for missing DNS assignments
+
+1.6.2 - December 5, 2013
+	* Many fixes to color implementation
+	* Functions properly with output now
