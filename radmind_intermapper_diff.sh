@@ -15,7 +15,7 @@
 ##                                                                            ##
 ## Author:          Pierce Darragh - pierce.darragh@utah.edu                  ##
 ## Creation Date:   November 18, 2013                                         ##
-## Last Updated:    December  5, 2013                                         ##
+## Last Updated:    December 11, 2013                                         ##
 ##                                                                            ##
 ## Permission to use, copy, modify, and distribute this software and its      ##
 ## documentation for any purpose and without fee is hereby granted, provided  ##
@@ -28,22 +28,35 @@
 ##                                                                            ##
 ################################################################################
 
+## EXCLUSIONS
+# Radmind Exclusions
+# If you have an IP address in Radmind that you don't want to be monitored by
+# InterMapper, then put it into this array.  We have none, so... it's empty.
+declare -a rm_exclude=(
+                        )
+
+# InterMapper Exclusions
+# If you have an IP address that InterMapper monitors that you don't have in
+# Radmind and you never will, put it into this array.
+declare -a im_exclude=(
+                        )
+
 ## GLOBAL VARIABLE DECLARATION (CONFIGURATION)
 RADMIND_CONFIG="/var/radmind/config"
 INTERMAPPER_ADDRESS="https://intermapper.scl.utah.edu/~admin/full_screen.html"
 INTERMAPPER_DEFAULT="./intermapper_list.html"
 
 ## OTHER VARIABLES (DON'T CHANGE)
-VERSION="1.6.2"
+VERSION="1.7.1"
 OUTPUTTING=0
 
 ## COLORS
 # These are used for more user-friendly output.
+RS="\033[0m"
 FBRED="\033[1;91m"
 FBGRN="\033[1;92m"
 FBYEL="\033[1;93m"
 FBCYN="\033[1;96m"
-RS="\033[0m"
 
 ## MISCELLANEOUS FUNCTIONS
 # Prints specified number of dashes.
@@ -55,6 +68,33 @@ printd () {
         for (( i=0; i<$1; i++ )); do
             echo -en "-"
         done
+    fi
+}
+
+# Checks to make sure the specified extra exclusions are valid; that is, the
+# first part of the string is either 1 or 2 (Radmind or InterMapper,
+# respectively), and then the rest are IP addresses [0-9]+.[0-9]+.[0-9].[0-9]+
+check_exclusions () {
+    echo "Checking exclusions..."
+    echo "$1"
+    IFS='~,/' read -ra arr <<< "$1"
+    for item in ${arr[@]}; do
+        echo "$item"
+    done
+    echo "Checking input: ${arr[0]}"
+    if [[ "${arr[0]}" -ne 1 && "${arr[0]}" -ne 2 ]]; then
+        echo "ERROR: Bad exclusion option."
+        echo "       Please enter 1 (Radmind) or 2 (InterMapper) first."
+        exit 1
+    elif [[ "${arr[0]}" -eq 1 ]]; then
+        echo "Radmind Exclusion"
+        exit 0
+    elif [[ "${arr[0]}" -eq 2 ]]; then
+        echo "InterMapper Exclusion"
+        exit 0
+    else
+        echo "Uh-oh..."
+        exit 1
     fi
 }
 
@@ -93,6 +133,11 @@ usage () {
         echo -en " "
     done
     echo "[-s] (1|2)"
+    for (( i=0; i<"${#name}"; i++ )); do
+        echo -en " "
+    done
+    echo -en "        "
+    echo "[-e] (1|2);address1;address2;..."
     echo
     echo "  h : display this help"
     echo "  v : display the current version"
@@ -100,6 +145,7 @@ usage () {
     echo "  g : only get the input addresses"
     echo "  n : don't find the disparity between lists"
     echo "  q : quiet mode - don't display the lists"
+    echo "  E : list all built-in exclusions and quit"
     echo
     echo "  c file : use 'file' as the Radmind config file"
     echo "  i file : use 'file' as the InterMapper file"
@@ -109,11 +155,16 @@ usage () {
     echo "  s # : only print one set of results"
     echo "    1 : Radmind"
     echo "    2 : InterMapper"
+    echo
+    echo "  e #~address : add 'address' as an exclusion to the # list;"
+    echo "                delimiters: ~ , /"
+    echo "    1         : Radmind"
+    echo "    2         : InterMapper"
 }
 
 ## OPTIONS
 # Switch for possible specified options.
-while getopts ":hvfnqc:i:o:s:" opt
+while getopts ":hvfnqc:i:o:s:e:" opt
 do
     case $opt in
     ## Options
@@ -148,6 +199,9 @@ do
         ;;
     s)  # Simple output (only one set of results)
         simple="$OPTARG"
+        ;;
+    e)  # Specify exclusions
+        check_exclusions "${OPTARG}"
         ;;
     ## Catches
     :)  # Some options require arguments - don't let the user forget them!
@@ -466,42 +520,42 @@ main () {
     declare -a im_hosts
 
     # Run the program's parts
-    if [[ -z "${simple}" || "${simple}" -eq 1 ]]; then
-        get_radmind
-        radmind_hostnames
-    fi
-    if [[ -z "${simple}" || "${simple}" -eq 2 ]]; then
-        get_intermapper
-        intermapper_hostnames
-    fi
-    if [[ -z "${no_disp}" ]]; then
-        if [[ -z "${simple}" ]]; then
-            radmind_disp
-            intermapper_disp
-        else
-            if [[ "${simple}" -eq 1 ]]; then
-                radmind_disp
-            else
-                intermapper_disp
-            fi
-        fi
-    fi
-
-    # File output (implement this)
-    if [[ -n "${output}" ]]; then
-        OUTPUTTING=1
-        file_out
-    fi
-
-    # Determine whether to output things
-    if [[ -z "${quiet}" ]]; then
-        OUTPUTTING=0
-        echo
-        output
-    fi
-
-    # Looks like we've made it out alive!
-    exit 0
+#     if [[ -z "${simple}" || "${simple}" -eq 1 ]]; then
+#         get_radmind
+#         radmind_hostnames
+#     fi
+#     if [[ -z "${simple}" || "${simple}" -eq 2 ]]; then
+#         get_intermapper
+#         intermapper_hostnames
+#     fi
+#     if [[ -z "${no_disp}" ]]; then
+#         if [[ -z "${simple}" ]]; then
+#             radmind_disp
+#             intermapper_disp
+#         else
+#             if [[ "${simple}" -eq 1 ]]; then
+#                 radmind_disp
+#             else
+#                 intermapper_disp
+#             fi
+#         fi
+#     fi
+#
+#     # File output (implement this)
+#     if [[ -n "${output}" ]]; then
+#         OUTPUTTING=1
+#         file_out
+#     fi
+#
+#     # Determine whether to output things
+#     if [[ -z "${quiet}" ]]; then
+#         OUTPUTTING=0
+#         echo
+#         output
+#     fi
+#
+#     # Looks like we've made it out alive!
+#     exit 0
 }
 
 ## EXECUTION
