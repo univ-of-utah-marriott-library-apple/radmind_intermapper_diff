@@ -42,12 +42,13 @@ declare -a im_exclude=(
                         )
 
 ## GLOBAL VARIABLE DECLARATION (CONFIGURATION)
-RADMIND_CONFIG="/var/radmind/config"
-INTERMAPPER_ADDRESS="https://intermapper.scl.utah.edu/~admin/full_screen.html"
+# Change these to accurately reflect your environment.
+RADMIND_CONFIG="/radmind_server_root/radmind/config"
+INTERMAPPER_ADDRESS="https://intermapper.address/~admin/full_screen.html"
 INTERMAPPER_DEFAULT="./intermapper_list.html"
 
 ## OTHER VARIABLES (DON'T CHANGE)
-VERSION="1.7.1"
+VERSION="1.7.2"
 OUTPUTTING=0
 
 ## COLORS
