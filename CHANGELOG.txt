@@ -44,3 +44,7 @@ CHANGELOG
 
 1.7.2 - Januray 7, 2014
 	* Added option to manually specify InterMapper address (-I)
+
+1.7.3 - January 7, 2014
+	* Fixed some error reporting
+	* Bug fixes

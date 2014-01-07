@@ -48,7 +48,7 @@ INTERMAPPER_ADDRESS="https://intermapper.address/~admin/full_screen.html"
 INTERMAPPER_DEFAULT="./intermapper_list.html"
 
 ## OTHER VARIABLES (DON'T CHANGE)
-VERSION="1.7.2"
+VERSION="1.7.3"
 OUTPUTTING=0
 
 ## COLORS
@@ -84,7 +84,7 @@ check_exclusions () {
     done
     echo "Checking input: ${arr[0]}"
     if [[ "${arr[0]}" -ne 1 && "${arr[0]}" -ne 2 ]]; then
-        echo "ERROR: Bad exclusion option."
+        echo -e "${FBRED}ERROR:${RS} Bad exclusion option."
         echo "       Please enter 1 (Radmind) or 2 (InterMapper) first."
         exit 1
     elif [[ "${arr[0]}" -eq 1 ]]; then
@@ -212,12 +212,12 @@ do
         ;;
     ## Catches
     :)  # Some options require arguments - don't let the user forget them!
-        echo "ERROR: Option -$OPTARG requires an argument."
+        echo -e "${FBRED}ERROR:${RS} Option -$OPTARG requires an argument."
         usage
         exit 1
         ;;
     \?)  # Report non-working options
-        echo "ERROR: Invalid option: -$OPTARG"
+        echo -e "${FBRED}ERROR:${RS} Invalid option: -$OPTARG"
         usage
         exit 1
         ;;
@@ -232,12 +232,12 @@ done
 # Radmind config file
 if [[ -z "${rm_file}" ]]; then
     if [[ -f "${RADMIND_CONFIG}" ]]; then
-        rm_file=config
-    else
-        echo "ERROR: No Radmind config file specified or found."
-        usage
-        exit 1
+        rm_file="${RADMIND_CONFIG}"
     fi
+fi
+if [[ -z "${rm_file}" ]]; then
+    echo -e "${FBRED}ERROR:${RS} No Radmind config file specified or found."
+    exit 1
 fi
 # InterMapper device list
 if [[ -z "${im_file}" ]]; then
@@ -258,12 +258,16 @@ if [[ -z "${im_file}" ]]; then
             im_file="${INTERMAPPER_DEFAULT}"
         fi
     else
-        echo "Attempting to download InterMapper list from:"
-        echo -e "\t${INTERMAPPER_ADDRESS}"
+        echo -en "\rInterMapper address is..."
+        echo -e "\t\t\t${FBCYN}[${INTERMAPPER_ADDRESS}]${RS}"
+        echo -en "Downloading InterMapper list..."
         curl -so "${INTERMAPPER_DEFAULT}" "${INTERMAPPER_ADDRESS}"
         if [[ $? -ne 0 ]]; then
-            echo "ERROR: Curl failed.  Error code $?."
+            echo -e "\t\t\t${FBRED}[failed]${RS}"
+            echo -e "${FBRED}ERROR:${RS} Curl failed.  Error code $?."
             exit 1
+        else
+            echo -e "\t\t\t${FBGRN}[done]${RS}"
         fi
         if [[ `grep "is not authorized to access this document from" \
                "${INTERMAPPER_DEFAULT}"` ]]; then
@@ -277,7 +281,7 @@ fi
 # Make sure the option is either 1 or 2.
 if [[ -n "${simple}" ]]; then
     if [[ "${simple}" -ne 1 && "${simple}" -ne 2 ]]; then
-        echo "ERROR: Invalid simple option: ${simple}"
+        echo -e "${FBRED}ERROR:${RS} Invalid simple option: ${simple}"
         echo "Terminating..."
         exit 1
     fi
@@ -375,7 +379,7 @@ get_host () {
     if [[ "$1" =~ [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
         found_host=$(host -W 2 "$1" | cut -d ' ' -f 5 | cut -d '.' -f 1)
     else
-        echo "ERROR: Hostname formatting: \"$1\""
+        echo -e "${FBRED}ERROR:${RS} Hostname formatting: \"$1\""
         exit 1
     fi
 }
