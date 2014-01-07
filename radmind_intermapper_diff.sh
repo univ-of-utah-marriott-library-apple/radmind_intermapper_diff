@@ -11,11 +11,11 @@
 ## disparity and reports this back to the user in an easily-readable format.  ##
 ##                                                                            ##
 ################################################################################
-## COPYRIGHT (c) 2013 Marriott Library IT Services.  All Rights Reserved.     ##
+## COPYRIGHT (c) 2014 Marriott Library IT Services.  All Rights Reserved.     ##
 ##                                                                            ##
 ## Author:          Pierce Darragh - pierce.darragh@utah.edu                  ##
 ## Creation Date:   November 18, 2013                                         ##
-## Last Updated:    December 11, 2013                                         ##
+## Last Updated:    January  07, 2014                                         ##
 ##                                                                            ##
 ## Permission to use, copy, modify, and distribute this software and its      ##
 ## documentation for any purpose and without fee is hereby granted, provided  ##
@@ -140,32 +140,35 @@ usage () {
     echo -en "        "
     echo "[-e] (1|2);address1;address2;..."
     echo
-    echo "  h : display this help"
-    echo "  v : display the current version"
-    echo "  f : gives full output (lists all addresses found)"
-    echo "  g : only get the input addresses"
-    echo "  n : don't find the disparity between lists"
-    echo "  q : quiet mode - don't display the lists"
-    echo "  E : list all built-in exclusions and quit"
+    echo "  h : Display this help and quit."
+    echo "  v : Display the current version and quit."
+    echo "  f : Gives full output (lists all addresses found)."
+    #### ADD THIS
+    echo "  g : Only get the input addresses."
+    echo "  n : Don't find the disparity between the lists."
+    echo "  q : Quiet mode - don't output the lists to the console."
+    #### ADD THIS
+    echo "  E : List all built-in exclusions and quit."
     echo
-    echo "  c file : use 'file' as the Radmind config file"
-    echo "  i file : use 'file' as the InterMapper file"
-    echo "  o file : use 'file' as the output file"
-    echo "           Note: there is still console output"
+    echo "  c file : Use 'file' as the Radmind config file."
+    echo "  i file : Use 'file' as the InterMapper file."
+    echo "  I address : Use 'address' as the InterMapper web address."
+    echo "  o file : Use 'file' as the output destination file."
+    echo "           Note: there is still console output by default."
     echo
-    echo "  s # : only print one set of results"
+    echo "  s # : Only print one set of results:"
     echo "    1 : Radmind"
     echo "    2 : InterMapper"
     echo
-    echo "  e #~address : add 'address' as an exclusion to the # list;"
-    echo "                delimiters: ~ , /"
+    echo "  e #~address : Add 'address' as an exclusion to the # list."
+    echo "                Valid delimiters: ~ , /"
     echo "    1         : Radmind"
     echo "    2         : InterMapper"
 }
 
 ## OPTIONS
 # Switch for possible specified options.
-while getopts ":hvfnqc:i:o:s:e:" opt
+while getopts ":hvfnqc:i:I:o:s:e:" opt
 do
     case $opt in
     ## Options
@@ -194,6 +197,9 @@ do
         ;;
     i)  # Specifies the InterMapper input file
         im_file="$OPTARG"
+        ;;
+    I)  # Specifies the InterMapper web address manually
+        INTERMAPPER_ADDRESS="$OPTARG"
         ;;
     o)  # Specifies an output file for the list of IPs
         output="$OPTARG"
@@ -521,42 +527,42 @@ main () {
     declare -a im_hosts
 
     # Run the program's parts
-#     if [[ -z "${simple}" || "${simple}" -eq 1 ]]; then
-#         get_radmind
-#         radmind_hostnames
-#     fi
-#     if [[ -z "${simple}" || "${simple}" -eq 2 ]]; then
-#         get_intermapper
-#         intermapper_hostnames
-#     fi
-#     if [[ -z "${no_disp}" ]]; then
-#         if [[ -z "${simple}" ]]; then
-#             radmind_disp
-#             intermapper_disp
-#         else
-#             if [[ "${simple}" -eq 1 ]]; then
-#                 radmind_disp
-#             else
-#                 intermapper_disp
-#             fi
-#         fi
-#     fi
-#
-#     # File output (implement this)
-#     if [[ -n "${output}" ]]; then
-#         OUTPUTTING=1
-#         file_out
-#     fi
-#
-#     # Determine whether to output things
-#     if [[ -z "${quiet}" ]]; then
-#         OUTPUTTING=0
-#         echo
-#         output
-#     fi
-#
-#     # Looks like we've made it out alive!
-#     exit 0
+    if [[ -z "${simple}" || "${simple}" -eq 1 ]]; then
+        get_radmind
+        radmind_hostnames
+    fi
+    if [[ -z "${simple}" || "${simple}" -eq 2 ]]; then
+        get_intermapper
+        intermapper_hostnames
+    fi
+    if [[ -z "${no_disp}" ]]; then
+        if [[ -z "${simple}" ]]; then
+            radmind_disp
+            intermapper_disp
+        else
+            if [[ "${simple}" -eq 1 ]]; then
+                radmind_disp
+            else
+                intermapper_disp
+            fi
+        fi
+    fi
+
+    # File output (implement this)
+    if [[ -n "${output}" ]]; then
+        OUTPUTTING=1
+        file_out
+    fi
+
+    # Determine whether to output things
+    if [[ -z "${quiet}" ]]; then
+        OUTPUTTING=0
+        echo
+        output
+    fi
+
+    # Looks like we've made it out alive!
+    exit 0
 }
 
 ## EXECUTION

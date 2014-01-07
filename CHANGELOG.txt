@@ -41,3 +41,6 @@ CHANGELOG
 
 1.7.1 - December 11, 2013
 	* Improved delimiting and accepting exclusions
+
+1.7.2 - Januray 7, 2014
+	* Added option to manually specify InterMapper address (-I)
