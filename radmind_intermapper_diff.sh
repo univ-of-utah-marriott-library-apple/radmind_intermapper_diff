@@ -15,7 +15,7 @@
 ##                                                                            ##
 ## Author:          Pierce Darragh - pierce.darragh@utah.edu                  ##
 ## Creation Date:   November 18, 2013                                         ##
-## Last Updated:    January  07, 2014                                         ##
+## Last Updated:    January  13, 2014                                         ##
 ##                                                                            ##
 ## Permission to use, copy, modify, and distribute this software and its      ##
 ## documentation for any purpose and without fee is hereby granted, provided  ##
@@ -162,8 +162,8 @@ usage () {
     echo
     echo "  e #~address : Add 'address' as an exclusion to the # list."
     echo "                Valid delimiters: ~ , /"
-    echo "    1         : Radmind"
-    echo "    2         : InterMapper"
+    echo "    1 : Radmind"
+    echo "    2 : InterMapper"
 }
 
 ## OPTIONS
