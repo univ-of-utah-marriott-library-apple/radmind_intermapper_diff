@@ -64,62 +64,94 @@ def set_gvars ():
     global FBGRN
     global FBYEL
     global FBCYN
-    
+
     RS = "\033[0m"
     FBRED = "\033[1;91m"
     FBGRN = "\033[1;92m"
     FBYEL = "\033[1;93m"
     FBCYN = "\033[1;96m"
-    
+
     # ADDRESSES
     # Change these for your local environment!  It'll make your life easier.
     global RADMIND_CONFIG
     global INTERMAPPER_ADDRESS
     global INTERMAPPER_DEFAULT
-    
+
     RADMIND_CONFIG = "/radmind_server_root/radmind/config"
     INTERMAPPER_ADDRESS = "https://intermapper.address/~admin/full_screen.html"
     INTERMAPPER_DEFAULT = "./intermapper_list.html"
-    
+
     # OTHER
     global VERSION
-    
+
     VERSION = "1.8.0"
 
 ## MAIN
 def main ():
     set_gvars()
-    
+
     parse_options()
-    
-    if explicit:
-        print "{:10} : {}".format('full', full)
-        print "{:10} : {}".format('quiet', quiet)
-        print "{:10} : {}".format('im_file', im_file)
-        print "{:10} : {}".format('im_address', im_address)
-        print "{:10} : {}".format('rm_file', rm_file)
-        print "{:10} : {}".format('out_file', out_file)
-    
+
     rm_list = get_radmind()
-    
+
+    im_list = get_intermapper()
+
+    if explicit:
+        print "\nThese variables were used:"
+        print "\t{:10} : {}".format('full', full)
+        print "\t{:10} : {}".format('quiet', quiet)
+        print "\t{:10} : {}".format('im_file', im_file)
+        print "\t{:10} : {}".format('im_address', im_address)
+        print "\t{:10} : {}".format('rm_file', rm_file)
+        print "\t{:10} : {}".format('out_file', out_file)
+
 ## RADMIND ADDRESSES
 def get_radmind ():
-	print "Getting Radmind list...\t\t\t\t" + FBCYN + "[" + rm_file + "]" + RS
-	f = open(rm_file)
-	
-	ip_pattern = re.compile('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
-	for line in f:
-		match = ip_pattern.search(line)
-		if match:
-			process(match)
-	
-	f.close()
+    list = []
+
+    print "Getting Radmind list...\t\t\t\t" + FBCYN + "[" + rm_file + "]" + RS,
+    try:
+        f = open(rm_file)
+    except IOError:
+        print ("\n" + FBRED + "ERROR:" + RS + " The file '" + rm_file +
+               "' could not be opened.")
+        sys.exit(1)
+
+    ip_pattern = re.compile('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+    for line in f:
+        match = ip_pattern.search(line)
+        if match:
+            list.append(match.group())
+
+    f.close()
+    print "\r\033[KGetting Radmind list...\t\t\t\t" + FBGRN + "[done]" + RS
+
+## INTERMAPPER ADDRESSES
+def get_intermapper ():
+    list = []
+
+    print ("Getting InterMapper list...\t\t\t" + FBCYN + "[" + im_file + "]" +
+           RS),
+    try:
+        f = open(im_file)
+    except IOError:
+        print ("\n" + FBRED + "ERROR:" + RS + " The file '" + im_file +
+              "' could not be opened.")
+        sys.exit(1)
+
+    ip_pattern = re.compile('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+    match = ip_pattern.findall(f.read())
+    for item in match:
+        list.append(item)
+
+    f.close()
+    print "\r\033[KGetting InterMapper list...\t\t\t" + FBGRN + "[done]" + RS
 
 ## PARSE FOR OPTIONS
 def parse_options ():
     # Add arguments to the parser.
     parser = argparse.ArgumentParser()
-    
+
     parser.add_argument("-v", "--version",
                         help="display the current version and quit",
                         action="store_true")
@@ -132,7 +164,7 @@ def parse_options ():
     parser.add_argument("-x", "--explicit",
                         help="show all declared variables at run-time",
                         action="store_true")
-    
+
     parser.add_argument("-i", "--intermapper_file",
                         help="use 'file' as InterMapper file",
                         metavar='\'file\'',
@@ -153,15 +185,15 @@ def parse_options ():
                         metavar='\'file\'',
                         dest='out_file',
                         default="")
-    
+
     # Make all arguments globally accessible
     globals().update(vars(parser.parse_args()))
-    
+
     # -v: Display version information and quit
     if version:
         print "%s" % VERSION
         sys.exit(0)
-    
+
 ## CLASSES
 
 ## CALL TO MAIN
