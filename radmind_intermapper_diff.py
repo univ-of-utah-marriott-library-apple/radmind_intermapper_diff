@@ -57,14 +57,15 @@ import sys
 import re
 import subprocess
 import getpass
+import urllib2
 
 ## DEFINE GLOBAL VARIABLES
 def set_gvars ():
     # REGEX PATTERNS
     global IP_PATTERN   # Generic IP address
-    
+
     IP_PATTERN = re.compile('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
-    
+
     # COLORS
     global RS       # Reset color settings
     global FBRED    # Foreground bright red
@@ -121,7 +122,7 @@ def get_radmind ():
     matches = []
     prompt = ("Getting Radmind list from " + FBCYN + "[" + rm_file + "]" + RS
               + "...")
-              
+
     print prompt,
     try:
         with open(rm_file) as f:
@@ -142,53 +143,50 @@ def get_radmind ():
 ## INTERMAPPER ADDRESSES
 # If InterMapper denies whitelist authentication.
 def im_authenticate ():
-    im_user = raw_input("InterMapper Username: ")
-    im_pass = getpass.getpass("InterMapper Password: ", stream=sys.stderr)
-    subprocess.call(['curl', '--user', im_user + ':' + im_pass, '-so',
-                     im_file, im_address])
-    
+    username = raw_input("InterMapper Username: ")
+    password= getpass.getpass("InterMapper Password: ", stream=sys.stderr)
 
-# This is called if no local InterMapper file can be found.
-def download_im_list ():
-    print "Attempting to download InterMapper file from"
-    pretty_print (FBCYN + "[" + INTERMAPPER_ADDRESS + "]" + RS + "...", 2)
-    subproccess.call(['curl', '-so', im_file, im_address])
-    try:
-    	with open(im_file) as f:
-    		for line in f:
-    			if "is not authorized to access this document from" in line:
-    				print "Invalid InterMapper file: " + im_file
-    				print "Deleting..."
-    				subprocess.call(['rm', 'im_file'])
-    				sys.exit(1)
-    			elif "The name/password pair you entered is incorrect." in line:
-    				print "Invalid InterMapper file: " + im_file
-    				print "Deleting..."
-    				subprocess.call(['rm', 'im_file'])
-    				sys.exit(1)
-    
+    password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+
+    password_mgr.add_password(None, im_address, username, password)
+
+    handler = urllib2.HTTPBasicAuthHandler(password_mgr)
+
+    opener = urllib2.build_opener(handler)
+
+    opener.open(address)
+
+    urllibe2.install_opener(opener)
+
+    # Need a loop in here somewhere...
 
 def get_intermapper ():
-    matches = []
     prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_file + "]"
               + RS + "...")
-    
+
     print prompt,
     try:
-        with open(im_file) as f:
-            match = IP_PATTERN.findall(f.read())
-            for item in match:
-                matches.append(item)
+        page = urllib2.urlopen(im_address).read()
+        matches = IP_PATTERN.findall(page)
         print CARET,
         pretty_print (prompt, 0)
         return matches
-    except IOError:
+    except urllib2.HTTPError as e:
         print CARET,
         pretty_print (prompt, 1)
-        print (FBYEL + "WARNING:" + RS + " The file " + FBCYN + "'" + im_file
-               + "'" + RS + " could not be opened.")
-        download_im_list()
+        print (FBYEL + "HTTP Error", e.code)
+        print (RS + "You are not authorized to access " + FBCYN + "'"
+               + im_address + "'" + RS + ".")
+        print "Attempting authentication..."
+        im_authenticate()
+    except urllib2.URLError as e:
+        print CARET,
+        pretty_print (prompt, 1)
+        print (FBRED + "ERROR:" + RS + " The address " + FBCYN + "'"
+               + im_address + "'" + RS + " could not be accessed.")
+        print "Reason:", e.reason
         sys.exit(1)
+
 
 ## PARSE FOR OPTIONS
 def parse_options ():
