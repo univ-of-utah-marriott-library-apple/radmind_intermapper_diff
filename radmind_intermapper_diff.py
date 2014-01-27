@@ -85,11 +85,9 @@ def set_gvars ():
     # Change these for your local environment!  It'll make your life easier.
     global RADMIND_CONFIG       # Default location of Radmind config file
     global INTERMAPPER_ADDRESS  # Default web address of InterMapper full list
-    global INTERMAPPER_DEFAULT  # Default local location for InterMapper list
 
     RADMIND_CONFIG = "/radmind_server_root/radmind/config"
     INTERMAPPER_ADDRESS = "https://intermapper.address/~admin/full_screen.html"
-    INTERMAPPER_DEFAULT = "./intermapper_list.html"
 
     # OTHER
     # DON'T CHANGE THESE
@@ -105,8 +103,11 @@ def main ():
     parse_options()
 
     rm_list = get_radmind()
-
-    im_list = get_intermapper()
+    
+    if im_file:
+        im_list = get_intermapper_file()
+    else:
+        im_list = get_intermapper_web()
 
     if explicit:
         print "\nThese variables were used:"
@@ -124,44 +125,39 @@ def get_radmind ():
               + "...")
 
     print prompt,
-    try:
-        with open(rm_file) as f:
-            for line in f:
-                match = IP_PATTERN.search(line)
-                if match:
-                    matches.append(match.group())
+    legit_file (rm_file, "rm", prompt)
+    prompt = ("Getting Radmind list from " + FBCYN + "[" + rm_file + "]"
+              + RS + "...")
+    with open(rm_file) as f:
+        matches = IP_PATTERN.findall(f.read())
         print CARET,
         pretty_print (prompt, 0)
-        return matches
-    except IOError:
-        print CARET,
-        pretty_print (prompt, 1)
-        print (FBRED + "ERROR:" + RS + " The file" + FBCYN + "'" + rm_file +
-               "'" + RS + " could not be opened.  Quitting...")
-        sys.exit(1)
+
+    return matches
 
 ## INTERMAPPER ADDRESSES
 # If InterMapper denies whitelist authentication.
 def im_authenticate ():
+    # Get username and password from the user.
     username = raw_input("InterMapper Username: ")
     password= getpass.getpass("InterMapper Password: ", stream=sys.stderr)
-
+    
     password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-
+    
     password_mgr.add_password(None, im_address, username, password)
-
+    
     handler = urllib2.HTTPBasicAuthHandler(password_mgr)
-
+    
     opener = urllib2.build_opener(handler)
-
-    opener.open(address)
-
+    
+    opener.open(im_address)
+    
     urllibe2.install_opener(opener)
-
+    
     # Need a loop in here somewhere...
 
-def get_intermapper ():
-    prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_file + "]"
+def get_intermapper_web ():
+    prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_address + "]"
               + RS + "...")
 
     print prompt,
@@ -174,7 +170,7 @@ def get_intermapper ():
     except urllib2.HTTPError as e:
         print CARET,
         pretty_print (prompt, 1)
-        print (FBYEL + "HTTP Error", e.code)
+        print ("HTTP Error", e.code)
         print (RS + "You are not authorized to access " + FBCYN + "'"
                + im_address + "'" + RS + ".")
         print "Attempting authentication..."
@@ -182,11 +178,43 @@ def get_intermapper ():
     except urllib2.URLError as e:
         print CARET,
         pretty_print (prompt, 1)
-        print (FBRED + "ERROR:" + RS + " The address " + FBCYN + "'"
+        print ("Error: The address " + FBCYN + "'"
                + im_address + "'" + RS + " could not be accessed.")
         print "Reason:", e.reason
         sys.exit(1)
+        
+def legit_file (location, switch, prompt = ''):
+    try:
+        with open(location) as f:
+            return
+    except IOError as e:
+        if prompt:
+            print CARET,
+            pretty_print (prompt, 1)
+        print "Error:", e.strerror + "."
+        if switch == "im":
+            print "Try using the [-i] switch to specify the file manually."
+        elif switch == "rm":
+            print "Try using the [-r] switch to specify the file manually."
+        sys.exit(1)
+        return
 
+def get_intermapper_file ():
+    matches = []
+    prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_file + "]"
+              + RS + "...")
+    
+    print prompt,
+    
+    legit_file (im_file, "im", prompt)
+    prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_file + "]"
+              + RS + "...")
+    with open(im_file) as f:
+        matches = IP_PATTERN.findall(f.read())
+        print CARET,
+        pretty_print (prompt, 0)
+    
+    return matches
 
 ## PARSE FOR OPTIONS
 def parse_options ():
@@ -210,7 +238,7 @@ def parse_options ():
                         help="use 'file' as InterMapper file",
                         metavar='\'file\'',
                         dest='im_file',
-                        default=INTERMAPPER_DEFAULT)
+                        default='')
     parser.add_argument("-I", "--intermapper_address",
                         help="use 'address' to get InterMapper list",
                         metavar='\'address\'',
