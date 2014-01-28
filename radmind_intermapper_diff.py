@@ -58,6 +58,69 @@ import re
 import subprocess
 import getpass
 import urllib2
+import socket
+
+## MAIN
+def main ():
+    # Initialization
+    set_gvars()
+    parse_options()
+
+    # Get the list of Radmind IPs
+    rm_list = get_radmind()
+
+    # Get the list of InterMapper IPs
+    # If the user specifies a file to get them from, use that.  Otherwise,
+    # attempt to connect to im_address and use a new version.
+    if im_file:
+        im_list = get_intermapper_file()
+    else:
+        im_list = get_intermapper_web()
+
+    '''
+    Attempting to sort the IP addresses, following suggestions at:
+    http://stackoverflow.com/questions/6545023/how-to-sort-ip-addresses-stored-in-dictionary-in-python
+    Presently it does not work properly.
+
+    Also consider moving these four lists into just two dictionaries, with the
+    entries formatted as:
+        ( ip_address, hostname )
+    '''
+    sorted_im_list = sorted(im_list, key=lambda item: socket.inet_aton(item[0]))
+    for item in sorted_im_list:
+        print item
+
+#     rm_hosts = get_hosts(rm_list)
+#     im_hosts = get_hosts(im_list)
+#
+#     print "rm_list length:", len(rm_list)
+#     print "im_list length:", len(im_list)
+#     print
+#     print "rm_hosts length:", len(rm_hosts)
+#     print "im_hosts length:", len(im_hosts)
+#     print
+#     print "Radmind Hosts"
+#     for x in range (0, len(rm_list)):
+#         if rm_hosts[x]:
+#             print "\t" + rm_list[x] + "\t" + rm_hosts[x]
+#         else:
+#             print "\t" + rm_list[x] + "\tNo hostname found."
+#     print
+#     print "InterMapper Hosts"
+#     for x in range (0, len(im_list)):
+#         if im_hosts[x]:
+#             print "\t" + im_list[x] + "\t" + im_hosts[x]
+#         else:
+#             print "\t" + im_list[x] + FBYEL + "\tNo hostname found." + RS
+
+    if explicit:
+        print "\nThese variables were used:"
+        print "\t{:10} : {}".format('full', full)
+        print "\t{:10} : {}".format('quiet', quiet)
+        print "\t{:10} : {}".format('im_file', im_file)
+        print "\t{:10} : {}".format('im_address', im_address)
+        print "\t{:10} : {}".format('rm_file', rm_file)
+        print "\t{:10} : {}".format('out_file', out_file)
 
 ## DEFINE GLOBAL VARIABLES
 def set_gvars ():
@@ -95,28 +158,21 @@ def set_gvars ():
 
     VERSION = "1.8.0"
 
-## MAIN
-def main ():
-    print " " * 80 + "|"
-    set_gvars()
+## GET HOSTNAMES
+def get_host (ip):
+    try:
+        data = socket.gethostbyaddr(ip)
+        host = repr(data[0])
+        return host
+    except Exception:
+        return False
 
-    parse_options()
-
-    rm_list = get_radmind()
-    
-    if im_file:
-        im_list = get_intermapper_file()
-    else:
-        im_list = get_intermapper_web()
-
-    if explicit:
-        print "\nThese variables were used:"
-        print "\t{:10} : {}".format('full', full)
-        print "\t{:10} : {}".format('quiet', quiet)
-        print "\t{:10} : {}".format('im_file', im_file)
-        print "\t{:10} : {}".format('im_address', im_address)
-        print "\t{:10} : {}".format('rm_file', rm_file)
-        print "\t{:10} : {}".format('out_file', out_file)
+## GET HOSTS LIST
+def get_hosts (list):
+    hosts = []
+    for address in list:
+        hosts.append(get_host(address))
+    return hosts
 
 ## RADMIND ADDRESSES
 def get_radmind ():
@@ -141,48 +197,65 @@ def im_authenticate ():
     # Get username and password from the user.
     username = raw_input("InterMapper Username: ")
     password= getpass.getpass("InterMapper Password: ", stream=sys.stderr)
-    
+
+    # The following is the recommended method of authenticating to a secure
+    # website, as per the Python documentation at the time of this writing.
     password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-    
     password_mgr.add_password(None, im_address, username, password)
-    
     handler = urllib2.HTTPBasicAuthHandler(password_mgr)
-    
     opener = urllib2.build_opener(handler)
-    
     opener.open(im_address)
-    
-    urllibe2.install_opener(opener)
-    
-    # Need a loop in here somewhere...
+    urllib2.install_opener(opener)
 
 def get_intermapper_web ():
     prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_address + "]"
               + RS + "...")
 
     print prompt,
-    try:
-        page = urllib2.urlopen(im_address).read()
-        matches = IP_PATTERN.findall(page)
+    while True:
+        try:
+            page = urllib2.urlopen(im_address).read()
+            matches = IP_PATTERN.findall(page)
+            print CARET,
+            pretty_print (prompt, 0)
+            return matches
+        except urllib2.HTTPError as e:
+            print CARET,
+            pretty_print (prompt, 1)
+            print ("HTTP Error", e.code)
+            print (RS + "You are not authorized to access " + FBCYN + "'"
+                   + im_address + "'" + RS + ".")
+            print "Attempting authentication..."
+            im_authenticate()
+        except urllib2.URLError as e:
+            print CARET,
+            pretty_print (prompt, 1)
+            print ("Error: The address " + FBCYN + "'"
+                   + im_address + "'" + RS + " could not be accessed.")
+            print "Reason:", e.reason
+            sys.exit(1)
+
+def get_intermapper_file ():
+    matches = []
+    prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_file + "]"
+              + RS + "...")
+
+    print prompt,
+
+    legit_file (im_file, "im", prompt)
+    prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_file + "]"
+              + RS + "...")
+    with open(im_file) as f:
+        matches = IP_PATTERN.findall(f.read())
         print CARET,
         pretty_print (prompt, 0)
-        return matches
-    except urllib2.HTTPError as e:
-        print CARET,
-        pretty_print (prompt, 1)
-        print ("HTTP Error", e.code)
-        print (RS + "You are not authorized to access " + FBCYN + "'"
-               + im_address + "'" + RS + ".")
-        print "Attempting authentication..."
-        im_authenticate()
-    except urllib2.URLError as e:
-        print CARET,
-        pretty_print (prompt, 1)
-        print ("Error: The address " + FBCYN + "'"
-               + im_address + "'" + RS + " could not be accessed.")
-        print "Reason:", e.reason
-        sys.exit(1)
-        
+
+    return matches
+
+
+## CHECK FILE LEGITIMACY
+# Determines whether an inputted file is able to be opened.  If not,
+# print the error message.
 def legit_file (location, switch, prompt = ''):
     try:
         with open(location) as f:
@@ -198,23 +271,6 @@ def legit_file (location, switch, prompt = ''):
             print "Try using the [-r] switch to specify the file manually."
         sys.exit(1)
         return
-
-def get_intermapper_file ():
-    matches = []
-    prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_file + "]"
-              + RS + "...")
-    
-    print prompt,
-    
-    legit_file (im_file, "im", prompt)
-    prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_file + "]"
-              + RS + "...")
-    with open(im_file) as f:
-        matches = IP_PATTERN.findall(f.read())
-        print CARET,
-        pretty_print (prompt, 0)
-    
-    return matches
 
 ## PARSE FOR OPTIONS
 def parse_options ():
