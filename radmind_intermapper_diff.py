@@ -59,6 +59,7 @@ import subprocess
 import getpass
 import urllib2
 import socket
+import traceback
 
 ## MAIN
 def main ():
@@ -86,9 +87,38 @@ def main ():
     entries formatted as:
         ( ip_address, hostname )
     '''
-    sorted_im_list = sorted(im_list, key=lambda item: socket.inet_aton(item[0]))
-    for item in sorted_im_list:
-        print item
+    
+    rm_stuff = {}
+    rm_longest = 0
+    for item in rm_list:
+        if len(item[0]) > rm_longest:
+            rm_longest = len(item[0])
+            print "rm_longest:", rm_longest
+        rm_stuff[item] = str(get_host(item)).replace("'", "")
+    
+    im_stuff = {}
+    im_longest = 0
+    for item in im_list:
+        if len(item[0]) > im_longest:
+            im_longest = len(item[0])
+            print "im_longest:", im_longest
+        im_stuff[item] = str(get_host(item)).replace("'", "")
+    
+    rm_sorted = []
+    try:
+        rm_sorted = sorted(rm_stuff.items(), key=lambda item: socket.inet_aton(item[0]))
+        im_sorted = sorted(im_stuff.items(), key=lambda item: socket.inet_aton(item[0]))
+    except:
+        traceback.print_exc(file=sys.stdout)
+    
+    print "Radmind items (" + str(len(rm_stuff)) + "):"
+    for item in rm_sorted:
+        print ("{0:>{1}}{2}".format(item[0], (im_longest + 2), item[1]))
+    
+    print
+#     print "InterMapper items (" + str(len(im_stuff)) + "):"
+#     for item in im_sorted:
+#         print ("{:>}{:4}{}".format(item[0], '', item[1]))
 
 #     rm_hosts = get_hosts(rm_list)
 #     im_hosts = get_hosts(im_list)
@@ -126,8 +156,16 @@ def main ():
 def set_gvars ():
     # REGEX PATTERNS
     global IP_PATTERN   # Generic IP address
+    global RM_PATTERN   # Radmind shorthand addresses: a.b.c.<d-e>
+    global RM_3         # Radmind three-deep match: 'a.b.c.'
+    global RM_FIRST     # Radmind first match: d in a.b.c.<d-e>
+    global RM_LAST      # Radmind last match: e in a.b.c.<d-e>
 
-    IP_PATTERN = re.compile('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+    IP_PATTERN = re.compile('\d+\.\d+\.\d+\.\d+')
+    RM_PATTERN = re.compile('\d+\.\d+\.\d+\.[^\s)]+')
+    RM_3       = re.compile('\d+\.\d+\.\d+\.')
+    RM_FIRST   = re.compile('<(\d+)')
+    RM_LAST    = re.compile('(\d+)>')
 
     # COLORS
     global RS       # Reset color settings
@@ -137,7 +175,7 @@ def set_gvars ():
     global FBCYN    # Foreground bright cyan
     global CARET    # Carriage return
 
-    RS = "\033[0m"
+    RS    = "\033[0m"
     FBRED = "\033[1;91m"
     FBGRN = "\033[1;92m"
     FBYEL = "\033[1;93m"
@@ -149,7 +187,7 @@ def set_gvars ():
     global RADMIND_CONFIG       # Default location of Radmind config file
     global INTERMAPPER_ADDRESS  # Default web address of InterMapper full list
 
-    RADMIND_CONFIG = "/radmind_server_root/radmind/config"
+    RADMIND_CONFIG      = "/radmind_server_root/radmind/config"
     INTERMAPPER_ADDRESS = "https://intermapper.address/~admin/full_screen.html"
 
     # OTHER
@@ -167,12 +205,12 @@ def get_host (ip):
     except Exception:
         return False
 
-## GET HOSTS LIST
-def get_hosts (list):
-    hosts = []
-    for address in list:
-        hosts.append(get_host(address))
-    return hosts
+# ## GET HOSTS LIST
+# def get_hosts (list):
+#     hosts = []
+#     for address in list:
+#         hosts.append(get_host(address))
+#     return hosts
 
 ## RADMIND ADDRESSES
 def get_radmind ():
@@ -185,9 +223,22 @@ def get_radmind ():
     prompt = ("Getting Radmind list from " + FBCYN + "[" + rm_file + "]"
               + RS + "...")
     with open(rm_file) as f:
-        matches = IP_PATTERN.findall(f.read())
-        print CARET,
-        pretty_print (prompt, 0)
+        addresses = RM_PATTERN.findall(f.read())
+    
+    for item in addresses:
+        first = RM_FIRST.findall(item)
+        if first:
+            base = RM_3.findall(item)
+            last = RM_LAST.findall(item)
+            for x in range (int(first[0]), int(last[0]) + 1):
+                full = base[0] + str(x)
+                matches.append(full)
+        else:
+            if not re.search('-', item):
+                matches.append(item)
+    
+    print CARET,
+    pretty_print (prompt, 0)
 
     return matches
 
@@ -200,12 +251,16 @@ def im_authenticate ():
 
     # The following is the recommended method of authenticating to a secure
     # website, as per the Python documentation at the time of this writing.
-    password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-    password_mgr.add_password(None, im_address, username, password)
-    handler = urllib2.HTTPBasicAuthHandler(password_mgr)
-    opener = urllib2.build_opener(handler)
-    opener.open(im_address)
-    urllib2.install_opener(opener)
+    try:
+        password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        password_mgr.add_password(None, im_address, username, password)
+        handler = urllib2.HTTPBasicAuthHandler(password_mgr)
+        opener = urllib2.build_opener(handler)
+        opener.open(im_address)
+        urllib2.install_opener(opener)
+    except:
+        print "Something went wrong during authentication.  Quitting..."
+        sys.exit(1)
 
 def get_intermapper_web ():
     prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_address + "]"
@@ -233,6 +288,11 @@ def get_intermapper_web ():
             print ("Error: The address " + FBCYN + "'"
                    + im_address + "'" + RS + " could not be accessed.")
             print "Reason:", e.reason
+            sys.exit(1)
+        except Exception as e:
+            print CARET,
+            pretty_print (prompt, 1)
+            print e.print_stack()
             sys.exit(1)
 
 def get_intermapper_file ():
