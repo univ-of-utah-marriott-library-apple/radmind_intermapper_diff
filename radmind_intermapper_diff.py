@@ -60,6 +60,7 @@ import getpass
 import urllib2
 import socket
 import traceback
+import textwrap
 
 ## MAIN
 def main ():
@@ -73,75 +74,57 @@ def main ():
     # Get the list of InterMapper IPs
     # If the user specifies a file to get them from, use that.  Otherwise,
     # attempt to connect to im_address and use a new version.
-    if im_file:
-        im_list = get_intermapper_file()
-    else:
-        im_list = get_intermapper_web()
-
-    '''
-    Attempting to sort the IP addresses, following suggestions at:
-    http://stackoverflow.com/questions/6545023/how-to-sort-ip-addresses-stored-in-dictionary-in-python
-    Presently it does not work properly.
-
-    Also consider moving these four lists into just two dictionaries, with the
-    entries formatted as:
-        ( ip_address, hostname )
-    '''
-    
-    rm_stuff = {}
-    rm_longest = 0
-    for item in rm_list:
-        if len(item[0]) > rm_longest:
-            rm_longest = len(item[0])
-            print "rm_longest:", rm_longest
-        rm_stuff[item] = str(get_host(item)).replace("'", "")
-    
-    im_stuff = {}
-    im_longest = 0
-    for item in im_list:
-        if len(item[0]) > im_longest:
-            im_longest = len(item[0])
-            print "im_longest:", im_longest
-        im_stuff[item] = str(get_host(item)).replace("'", "")
-    
-    rm_sorted = []
-    try:
-        rm_sorted = sorted(rm_stuff.items(), key=lambda item: socket.inet_aton(item[0]))
-        im_sorted = sorted(im_stuff.items(), key=lambda item: socket.inet_aton(item[0]))
-    except:
-        traceback.print_exc(file=sys.stdout)
-    
-    print "Radmind items (" + str(len(rm_stuff)) + "):"
-    for item in rm_sorted:
-        print ("{0:>{1}}{2}".format(item[0], (im_longest + 2), item[1]))
-    
-    print
+#     if im_file:
+#         im_list = get_intermapper_file()
+#     else:
+#         im_list = get_intermapper_web()
+# 
+#     '''
+#     Attempting to sort the IP addresses, following suggestions at:
+#     http://stackoverflow.com/questions/6545023/how-to-sort-ip-addresses-stored-in-dictionary-in-python
+#     Presently it does not work properly.
+# 
+#     Also consider moving these four lists into just two dictionaries, with the
+#     entries formatted as:
+#         ( ip_address, hostname )
+#     '''
+#     
+#     rm_stuff = {}
+#     rm_longest = 0
+#     for item in rm_list:
+#         if len(item) > rm_longest:
+#             rm_longest = len(item)
+#         rm_stuff[item] = str(get_host(item)).replace("'", "")
+#     
+#     im_stuff = {}
+#     im_longest = 0
+#     for item in im_list:
+#         if len(item) > im_longest:
+#             im_longest = len(item)
+#         im_stuff[item] = str(get_host(item)).replace("'", "")
+#     
+#     rm_sorted = []
+#     try:
+#         rm_sorted = sorted(rm_stuff.items(), key=lambda item: socket.inet_aton(item[0]))
+#         im_sorted = sorted(im_stuff.items(), key=lambda item: socket.inet_aton(item[0]))
+#     except:
+#         traceback.print_exc(file=sys.stdout)
+#     
+#     print "Radmind items (" + str(len(rm_stuff)) + "):"
+#     for item in rm_sorted:
+#         if not item[1] == "False":
+#             print ("  {0:<{1}} {2}".format(item[0], (rm_longest + 2), item[1]))
+#         else:
+#             print ("  {0:<{1}} {2}".format(item[0], (rm_longest + 2), FBYEL + "No DNS Entry" + RS))
+#     
+#     print
 #     print "InterMapper items (" + str(len(im_stuff)) + "):"
 #     for item in im_sorted:
-#         print ("{:>}{:4}{}".format(item[0], '', item[1]))
-
-#     rm_hosts = get_hosts(rm_list)
-#     im_hosts = get_hosts(im_list)
-#
-#     print "rm_list length:", len(rm_list)
-#     print "im_list length:", len(im_list)
-#     print
-#     print "rm_hosts length:", len(rm_hosts)
-#     print "im_hosts length:", len(im_hosts)
-#     print
-#     print "Radmind Hosts"
-#     for x in range (0, len(rm_list)):
-#         if rm_hosts[x]:
-#             print "\t" + rm_list[x] + "\t" + rm_hosts[x]
+#         if not item[1] == "False":
+#             print ("  {0:<{1}} {2}".format(item[0], (im_longest + 2), item[1]))
 #         else:
-#             print "\t" + rm_list[x] + "\tNo hostname found."
-#     print
-#     print "InterMapper Hosts"
-#     for x in range (0, len(im_list)):
-#         if im_hosts[x]:
-#             print "\t" + im_list[x] + "\t" + im_hosts[x]
-#         else:
-#             print "\t" + im_list[x] + FBYEL + "\tNo hostname found." + RS
+#             print ("  {0:<{1}} {2}".format(item[0], (im_longest + 2), FBYEL + "No DNS Entry" + RS))
+    
 
     if explicit:
         print "\nThese variables were used:"
@@ -215,32 +198,40 @@ def get_host (ip):
 ## RADMIND ADDRESSES
 def get_radmind ():
     matches = []
-    prompt = ("Getting Radmind list from " + FBCYN + "[" + rm_file + "]" + RS
-              + "...")
-
-    print prompt,
-    legit_file (rm_file, "rm", prompt)
-    prompt = ("Getting Radmind list from " + FBCYN + "[" + rm_file + "]"
-              + RS + "...")
-    with open(rm_file) as f:
-        addresses = RM_PATTERN.findall(f.read())
+    prompt = ("Getting Radmind list from [" + rm_file + "]...")
     
-    for item in addresses:
-        first = RM_FIRST.findall(item)
-        if first:
-            base = RM_3.findall(item)
-            last = RM_LAST.findall(item)
-            for x in range (int(first[0]), int(last[0]) + 1):
-                full = base[0] + str(x)
-                matches.append(full)
-        else:
-            if not re.search('-', item):
-                matches.append(item)
-    
-    print CARET,
+#     if len(rm_file) <= 40:
+#         print ("Getting Radmind list from [" + rm_file + "]...")
+#     else:
+#         print "Getting Radmind list from"
+#         print FBCYN,
+#         print "{0:>71}".format("[" + rm_file + "]"),
+#         print "\b" + RS + "...",
     pretty_print (prompt, 0)
 
-    return matches
+#     print prompt,
+#     legit_file (rm_file, "rm", prompt)
+#     prompt = ("Getting Radmind list from " + FBCYN + "[" + rm_file + "]"
+#               + RS + "...")
+#     with open(rm_file) as f:
+#         addresses = RM_PATTERN.findall(f.read())
+#     
+#     for item in addresses:
+#         first = RM_FIRST.findall(item)
+#         if first:
+#             base = RM_3.findall(item)
+#             last = RM_LAST.findall(item)
+#             for x in range (int(first[0]), int(last[0]) + 1):
+#                 full = base[0] + str(x)
+#                 matches.append(full)
+#         else:
+#             if not re.search('-', item):
+#                 matches.append(item)
+#     
+#     print CARET,
+#     pretty_print (prompt, 1)
+# 
+#     return matches
 
 ## INTERMAPPER ADDRESSES
 # If InterMapper denies whitelist authentication.
@@ -272,26 +263,30 @@ def get_intermapper_web ():
             page = urllib2.urlopen(im_address).read()
             matches = IP_PATTERN.findall(page)
             print CARET,
-            pretty_print (prompt, 0)
+            pretty_print (prompt, 1)
             return matches
         except urllib2.HTTPError as e:
             print CARET,
-            pretty_print (prompt, 1)
-            print ("HTTP Error", e.code)
-            print (RS + "You are not authorized to access " + FBCYN + "'"
-                   + im_address + "'" + RS + ".")
+            pretty_print (prompt, 2)
+            print "HTTP Error", e.code
+            if len(im_address) < 33:
+                print ("You are not authorized to access the address: " + 
+                       FBCYN + "[" + im_address + "]" + RS)
+            else:
+                print "You are not authorized to access the address:"
+                print FBCYN + "\t[" + im_address + "]" + RS
             print "Attempting authentication..."
             im_authenticate()
         except urllib2.URLError as e:
             print CARET,
-            pretty_print (prompt, 1)
+            pretty_print (prompt, 2)
             print ("Error: The address " + FBCYN + "'"
                    + im_address + "'" + RS + " could not be accessed.")
             print "Reason:", e.reason
             sys.exit(1)
         except Exception as e:
             print CARET,
-            pretty_print (prompt, 1)
+            pretty_print (prompt, 2)
             print e.print_stack()
             sys.exit(1)
 
@@ -303,12 +298,10 @@ def get_intermapper_file ():
     print prompt,
 
     legit_file (im_file, "im", prompt)
-    prompt = ("Getting InterMapper list from " + FBCYN + "[" + im_file + "]"
-              + RS + "...")
     with open(im_file) as f:
         matches = IP_PATTERN.findall(f.read())
         print CARET,
-        pretty_print (prompt, 0)
+        pretty_print (prompt, 1)
 
     return matches
 
@@ -323,7 +316,7 @@ def legit_file (location, switch, prompt = ''):
     except IOError as e:
         if prompt:
             print CARET,
-            pretty_print (prompt, 1)
+            pretty_print (prompt, 2)
         print "Error:", e.strerror + "."
         if switch == "im":
             print "Try using the [-i] switch to specify the file manually."
@@ -380,20 +373,62 @@ def parse_options ():
         sys.exit(0)
 
 ## PROPER SPACING FOR RESULTS
-def pretty_print (s, i):
-    if len(s) < 70:
-        if i == 0:
-            print "\b" + s + " " * (85 - len(s)) + FBGRN + "[done]" + RS
-        elif i == 1:
-            print "\b" + s + " " * (83 - len(s)) + FBRED + "[failed]" + RS
-        else:
-            print "\b" + " " * (91 - len(s)) + s
+def pretty_print (s, i = 0):
+    # Success
+    if i == 1:
+        print "\b" + s + (" " * (85 - len(s))) + FBGRN + "[done]" + RS
+    # Failure
+    elif i == 2:
+        print "\b" + s + (" " * (83 - len(s))) + FBRED + "[failed]" + RS
+    # Formatting
     else:
-        print "\b" + s
-        if i == 0:
-            print " " * 74 + FBGRN + "[done]" + RS
-        elif i == 1:
-            print " " * 72 + FBRED + "[failed]" + RS
+        dedented_text = textwrap.dedent(s).strip()
+        print textwrap.fill(dedented_text, initial_indent='',
+                            subsequent_indent='    ')
+        print "{0:>80}".format("[failed]")
+#         print len(s)
+#         if len(s) <= 71:
+#             print s
+#         else:
+#             words = s.split()
+#             print words
+#             count = 0
+#             string = ""
+#             lastPrinted = 0
+#             for i in range (0, len(words)):
+#                 if (count + len(words[i]) + 1) > 71:
+#                     break
+#                 else:
+#                     count += len(words[i]) + 1
+#                     print count
+#                     string += words[i] + " "
+#                     lastPrinted = i
+#             print string
+#             while lastPrinted < len(words):
+#                 for i in range (lastPrinted, len(words)):
+#                     if (count + len(words[i]) + 1) > 71:
+#                         break
+#                     else:
+#                         count += len(words[i]) + 1
+#                         print count
+#                         string += words[i] + " "
+#                         lastPrinted = i
+            
+#         if len(s) < 70:
+#             if i == 0:
+#                 print "\b" + s + " " * (85 - len(s)) + FBGRN + "[done]" + RS
+#             elif i == 1:
+#                 print "\b" + s + " " * (83 - len(s)) + FBRED + "[failed]" + RS
+#             else:
+#                 print "\b" + " " * (91 - len(s)) + s
+#         else:
+#             print "\b" + s
+#             if i == 0:
+#                 print " " * 74 + FBGRN + "[done]" + RS
+#             elif i == 1:
+#                 print " " * 72 + FBRED + "[failed]" + RS
+#     else:
+#         print
 
 ## CALL TO MAIN
 if __name__ == "__main__":
