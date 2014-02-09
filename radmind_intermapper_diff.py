@@ -79,16 +79,7 @@ def main ():
     else:
         im_list = get_intermapper_web()
 
-    '''
-    Attempting to sort the IP addresses, following suggestions at:
-    http://stackoverflow.com/questions/6545023/how-to-sort-ip-addresses-stored-in-dictionary-in-python
-    Presently it does not work properly.
-
-    Also consider moving these four lists into just two dictionaries, with the
-    entries formatted as:
-        ( ip_address, hostname )
-    '''
-
+    # Get the hostnames for Radmind IPs
     rm_stuff = {}
     rm_longest = 0
     for item in rm_list:
@@ -96,6 +87,7 @@ def main ():
             rm_longest = len(item)
         rm_stuff[item] = str(get_host(item)).replace("'", "")
 
+    # Get the hostnames for InterMapper IPs
     im_stuff = {}
     im_longest = 0
     for item in im_list:
@@ -103,29 +95,79 @@ def main ():
             im_longest = len(item)
         im_stuff[item] = str(get_host(item)).replace("'", "")
 
+    '''
+    Sort the IP addresses.
+
+    The following sort method was detailed in an answer by Ferdinand Beyer to
+    the question "How to sort IP addresses stored in dictionary in Python?" at:
+        http://stackoverflow.com/questions/6545023/how-to-sort-ip-addresses-
+        stored-in-dictionary-in-python
+    It returns the values with the IP addresses sorted properly, and keeps
+    their hostnames attached.
+    '''
     rm_sorted = []
+    im_sorted = []
     try:
-        rm_sorted = sorted(rm_stuff.items(), key=lambda item: socket.inet_aton(item[0]))
-        im_sorted = sorted(im_stuff.items(), key=lambda item: socket.inet_aton(item[0]))
+        rm_sorted = sorted(rm_stuff.items(),
+                           key=lambda item: socket.inet_aton(item[0]))
+        im_sorted = sorted(im_stuff.items(),
+                           key=lambda item: socket.inet_aton(item[0]))
     except:
         traceback.print_exc(file=sys.stdout)
 
-    print "Radmind items (" + str(len(rm_stuff)) + "):"
-    for item in rm_sorted:
-        if not item[1] == "False":
-            print ("  {0:<{1}} {2}".format(item[0], (rm_longest + 2), item[1]))
+    longest = rm_longest if (rm_longest > im_longest) else im_longest
+
+    # Find the Radmind positive disparities
+    rm_diff = differences(rm_sorted, im_sorted)
+    # Find the InterMapper positive disparities
+    im_diff = differences(im_sorted, rm_sorted)
+
+    if out_file:
+        file_output()
+
+    if not quiet:
+        if full:
+            # Full console output
+            print "Radmind items (" + str(len(rm_stuff)) + "):"
+            for item in rm_sorted:
+                if not item[1] == "False":
+                    print ("  {0:<{1}} {2}".format(item[0], (longest + 2),
+                                                   item[1]))
+                else:
+                    print ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL
+                                                   + "No DNS Entry" + RS))
+
+            print
+            print "InterMapper items (" + str(len(im_stuff)) + "):"
+            for item in im_sorted:
+                if not item[1] == "False":
+                    print ("  {0:<{1}} {2}".format(item[0], (longest + 2),
+                                                   item[1]))
+                else:
+                    print ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL
+                                                   + "No DNS Entry" + RS))
         else:
-            print ("  {0:<{1}} {2}".format(item[0], (rm_longest + 2), FBYEL + "No DNS Entry" + RS))
+            # Differences console output
+            print "Radmind items (" + str(len(rm_diff)) + "):"
+            for item in rm_diff:
+                if not item[1] == "False":
+                    print ("  {0:<{1}} {2}".format(item[0], (longest + 2),
+                                                   item[1]))
+                else:
+                    print ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL
+                                                   + "No DNS Entry" + RS))
 
-    print
-    print "InterMapper items (" + str(len(im_stuff)) + "):"
-    for item in im_sorted:
-        if not item[1] == "False":
-            print ("  {0:<{1}} {2}".format(item[0], (im_longest + 2), item[1]))
-        else:
-            print ("  {0:<{1}} {2}".format(item[0], (im_longest + 2), FBYEL + "No DNS Entry" + RS))
+            print
+            print "InterMapper items (" + str(len(im_diff)) + "):"
+            for item in im_diff:
+                if not item[1] == "False":
+                    print ("  {0:<{1}} {2}".format(item[0], (longest + 2),
+                                                   item[1]))
+                else:
+                    print ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL
+                                                   + "No DNS Entry" + RS))
 
-
+    # If the user specified the explicit option, show all of the variables used.
     if explicit:
         print "\nThese variables were used:"
         print "\t{:10} : {}".format('full', full)
@@ -134,6 +176,10 @@ def main ():
         print "\t{:10} : {}".format('im_address', im_address)
         print "\t{:10} : {}".format('rm_file', rm_file)
         print "\t{:10} : {}".format('out_file', out_file)
+
+def file_output ():
+    print "Outputting to file..."
+    return
 
 ## DEFINE GLOBAL VARIABLES
 def set_gvars ():
@@ -188,13 +234,6 @@ def get_host (ip):
     except Exception:
         return False
 
-# ## GET HOSTS LIST
-# def get_hosts (list):
-#     hosts = []
-#     for address in list:
-#         hosts.append(get_host(address))
-#     return hosts
-
 ## RADMIND ADDRESSES
 def get_radmind ():
     matches = []
@@ -202,8 +241,12 @@ def get_radmind ():
 
     pretty_print (prompt)
     legit_file (rm_file, "rm", prompt)
+    addresses = []
     with open(rm_file) as f:
-        addresses = RM_PATTERN.findall(f.read())
+        for line in f:
+            result = RM_PATTERN.match(line)
+            if result:
+                addresses.append(result.group(0))
 
     for item in addresses:
         first = RM_FIRST.findall(item)
@@ -254,12 +297,6 @@ def get_intermapper_web ():
         except urllib2.HTTPError as e:
             pretty_print (prompt, 2)
             print "HTTP Error", e.code
-#             if len(im_address) < 33:
-#                 print ("You are not authorized to access the address: ["
-#                        + im_address + "]")
-#             else:
-#                 print "You are not authorized to access the address:"
-#                 print FBCYN + "\t[" + im_address + "]" + RS
             message = ("You are not authorized to access the addres: ["
                        + im_address + "]")
             pretty_print (message)
@@ -293,6 +330,22 @@ def get_intermapper_file ():
 
     return matches
 
+## FIND DISPARITY
+# Takes in two dictionaries, assumed to be formatted as:
+#   IP_Address, hostname
+# and finds out which items exist in the first list and not the second.
+def differences (positive, negative):
+    different = []
+    for index in range (0, len(positive)):
+        if not (compare (positive[index][0], negative)):
+            different.append(positive[index])
+    return different
+
+def compare (value, list):
+    for other in list:
+        if value == other[0]:
+            return True
+    return False
 
 ## CHECK FILE LEGITIMACY
 # Determines whether an inputted file is able to be opened.  If not,
@@ -349,14 +402,14 @@ def parse_options ():
                         help="use 'file' to record results",
                         metavar='\'file\'',
                         dest='out_file',
-                        default="")
+                        default='')
 
     # Make all arguments globally accessible
     globals().update(vars(parser.parse_args()))
 
     # -v: Display version information and quit
     if version:
-        print "%s" % VERSION
+        print "{}".format(VERSION)
         sys.exit(0)
 
 '''
@@ -368,7 +421,7 @@ PROPER SPACING FOR RESULTS
         pretty_print (MESSAGE)
     This sets up the formatting by outputting the text, without inserting a
     newline at the end.  Then call:
-        pretty_print (MESSAGE, 1)        // or 2 for failure
+        pretty_print (MESSAGE, 1)        // or 2 for [failed]
     This will append the "[done]" message, right-aligned at 80 characters.
 ################################################################################
 '''
