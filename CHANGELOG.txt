@@ -35,3 +35,16 @@ CHANGELOG
 1.6.2 - December 5, 2013
 	* Many fixes to color implementation
 	* Functions properly with output now
+
+1.7.0 - December 10, 2013
+	* Beginning to work on exclusions
+
+1.7.1 - December 11, 2013
+	* Improved delimiting and accepting exclusions
+
+1.7.2 - Januray 7, 2014
+	* Added option to manually specify InterMapper address (-I)
+
+1.7.3 - January 7, 2014
+	* Fixed some error reporting
+	* Bug fixes
