@@ -227,7 +227,7 @@ def file_output ():
 '''
 ################################################################################
 DEFINE GLOBAL VARIABLES
-    
+
     A few variables are used throughout this script, and they are defined here.
 ################################################################################
 '''
@@ -277,7 +277,7 @@ def set_gvars ():
 '''
 ################################################################################
 GET HOSTNAME
-    
+
     Takes an IP address and attempts to find a valid hostname for that address.
     If none is found, False is stored in its place.
 ################################################################################
@@ -364,7 +364,7 @@ def im_authenticate ():
         pretty_print(prompt, 2)
         print "Something went wrong during authentication.  Quitting..."
         sys.exit(1)
-        
+
 '''
 ################################################################################
 INTERMAPPER WEB
@@ -382,6 +382,7 @@ def get_intermapper_web ():
     while True:
         try:
             page = urllib2.urlopen(im_address).read()
+            pretty_print (prompt, 1)
             break;
         except urllib2.HTTPError as e:
             pretty_print (prompt, 2)
@@ -401,7 +402,7 @@ def get_intermapper_web ():
             pretty_print (prompt, 2)
             print e.print_stack()
             sys.exit(1)
-        
+
     matches = IP_PATTERN.findall(page)
     return matches
 
@@ -429,7 +430,7 @@ def get_intermapper_file ():
 '''
 ################################################################################
 FIND DISPARITY
-    
+
     Takes in two dictionaries, which are assumed to be formatted as:
         {IP_Address, hostname}
     and finds out which items exist in the first list, but not the second.
@@ -489,7 +490,7 @@ PARSE FOR OPTIONS
         -q, --quiet
         -x, --explicit
         -d, --dns_full
-        
+
         -r, --radmind_file 'file'
         -i, --intermapper_file 'file'
         -I, --intermapper_address 'address'
