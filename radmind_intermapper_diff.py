@@ -30,7 +30,7 @@ Command-line options available:
   -o 'file' : use 'file' as the output destination file
               Note: there is still console output by default!
 
-  -s # : only print one set of results:
+  -s # : only qprint one set of results:
      1 : Radmind
      2 : InterMapper
 
@@ -101,14 +101,14 @@ def main ():
 
     # If the user specified the explicit option, show all of the variables used.
     if explicit:
-        print "\nThese variables were used:"
-        print "\t{:10} : {}".format('full', full)
-        print "\t{:10} : {}".format('quiet', quiet)
-        print "\t{:10} : {}".format('im_file', im_file)
-        print "\t{:10} : {}".format('im_address', im_address)
-        print "\t{:10} : {}".format('rm_file', rm_file)
-        print "\t{:10} : {}".format('out_file', out_file)
-        print
+        qprint ("\nThese variables were used:")
+        qprint ("\t{:10} : {}".format('full', full))
+        qprint ("\t{:10} : {}".format('quiet', quiet))
+        qprint ("\t{:10} : {}".format('im_file', im_file))
+        qprint ("\t{:10} : {}".format('im_address', im_address))
+        qprint ("\t{:10} : {}".format('rm_file', rm_file))
+        qprint ("\t{:10} : {}".format('out_file', out_file))
+        qprint ()
 
     # Get the list of Radmind IPs
     rm_list = get_radmind()
@@ -122,7 +122,7 @@ def main ():
         im_list = get_intermapper_web()
 
     # Get the hostnames for Radmind IPs
-    print "Getting Radmind hostnames..."
+    qprint ("Getting Radmind hostnames...")
     rm_stuff = {}
     rm_longest = 0
     for i in range(0, len(rm_list)):
@@ -134,7 +134,7 @@ def main ():
     update_progress()
 
     # Get the hostnames for InterMapper IPs
-    print "Getting InterMapper hostnames..."
+    qprint ("Getting InterMapper hostnames...")
     im_stuff = {}
     im_longest = 0
     for i in range(0, len(im_list)):
@@ -168,49 +168,49 @@ def main ():
     longest = rm_longest if (rm_longest > im_longest) else im_longest
 
     # Find the Radmind positive disparities
-    print "Finding Radmind positive disparity..."
+    qprint ("Finding Radmind positive disparity...")
     rm_diff = differences(rm_sorted, im_sorted)
     # Find the InterMapper positive disparities
-    print "Finding InterMapper positive disparity..."
+    qprint ("Finding InterMapper positive disparity...")
     im_diff = differences(im_sorted, rm_sorted)
 
     if out_file:
         file_output()
 
     if not quiet:
-        print "\n"
+        qprint ("\n")
         if full:
             # Full console output
-            print "Radmind items (" + str(len(rm_stuff)) + "):"
+            qprint ("Radmind items (" + str(len(rm_stuff)) + "):")
             for item in rm_sorted:
                 if not item[1] == "False":
-                    print "  {0:<{1}} {2}".format(item[0], (longest + 2), item[1])
+                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), item[1]))
                 else:
-                    print "  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS)
+                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS))
 
-            print
-            print "InterMapper items (" + str(len(im_stuff)) + "):"
+            qprint ()
+            qprint ("InterMapper items (" + str(len(im_stuff)) + "):")
             for item in im_sorted:
                 if not item[1] == "False":
-                    print "  {0:<{1}} {2}".format(item[0], (longest + 2), item[1])
+                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), item[1]))
                 else:
-                    print "  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS)
+                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS))
         else:
             # Differences console output
-            print "Radmind items (" + str(len(rm_diff)) + "):"
+            qprint ("Radmind items (" + str(len(rm_diff)) + "):")
             for item in rm_diff:
                 if not item[1] == "False":
-                    print "  {0:<{1}} {2}".format(item[0], (longest + 2), item[1])
+                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), item[1]))
                 else:
-                    print "  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS)
+                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS))
 
-            print
-            print "InterMapper items (" + str(len(im_diff)) + "):"
+            qprint ()
+            qprint ("InterMapper items (" + str(len(im_diff)) + "):")
             for item in im_diff:
                 if not item[1] == "False":
-                    print "  {0:<{1}} {2}".format(item[0], (longest + 2), item[1])
+                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), item[1]))
                 else:
-                    print "  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS)
+                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS))
 
 '''
 ################################################################################
@@ -221,7 +221,7 @@ OUTPUT TO FILE
 ################################################################################
 '''
 def file_output ():
-    print "Outputting to file..."
+    qprint ("Outputting to file...")
     return
 
 '''
@@ -344,7 +344,7 @@ INTERMAPPER AUTHENTICATION
 '''
 def im_authenticate ():
     # Get username and password from the user.
-    print "Please provide credentials."
+    qprint ("Please provide credentials.")
     username = raw_input("  InterMapper Username: ")
     password= getpass.getpass("  InterMapper Password: ", stream=sys.stderr)
     prompt = "Attempting authentication..."
@@ -362,7 +362,7 @@ def im_authenticate ():
         pretty_print(prompt, 1)
     except:
         pretty_print(prompt, 2)
-        print "Something went wrong during authentication.  Quitting..."
+        qprint ("Something went wrong during authentication.  Quitting...")
         sys.exit(1)
 
 '''
@@ -386,17 +386,17 @@ def get_intermapper_web ():
             break;
         except urllib2.HTTPError as e:
             pretty_print (prompt, 2)
-            print "HTTP Error", e.code
+            qprint ("HTTP Error", e.code)
             message = "You are not authorized to access the addres: [" + im_address + "]"
             pretty_print (message)
-            print
+            qprint ()
             im_authenticate()
         except urllib2.URLError as e:
             pretty_print (prompt, 2)
             message = "Error:  The address could not be accessed."
             pretty_print (message)
-            print
-            print "Reason:", e.reason
+            qprint ()
+            qprint ("Reason:", e.reason)
             sys.exit(1)
         except Exception as e:
             pretty_print (prompt, 2)
@@ -462,7 +462,7 @@ CHECK FILE LEGITIMACY
 '''
 ## CHECK FILE LEGITIMACY
 # Determines whether an inputted file is able to be opened.  If not,
-# print the error message.
+# qprint the error message.
 def legit_file (location, switch, prompt = ''):
     try:
         with open(location) as f:
@@ -470,12 +470,12 @@ def legit_file (location, switch, prompt = ''):
     except IOError as e:
         if prompt:
             pretty_print (prompt, 2)
-        print
-        print "Error:", e.strerror + "."
+        qprint ()
+        qprint ("Error:", e.strerror + ".")
         if switch == "im":
-            print "Try using the [-i] switch to specify the file manually."
+            qprint ("Try using the [-i] switch to specify the file manually.")
         elif switch == "rm":
-            print "Try using the [-r] switch to specify the file manually."
+            qprint ("Try using the [-r] switch to specify the file manually.")
         sys.exit(1)
 
 '''
@@ -543,7 +543,7 @@ def parse_options ():
 
     # -v: Display version information and quit
     if version:
-        print "{}".format(VERSION)
+        qprint ("{}".format(VERSION))
         sys.exit(0)
 
 '''
@@ -560,6 +560,9 @@ PROPER SPACING FOR FORMATTING
 ################################################################################
 '''
 def pretty_print (s, i = 0):
+    # If we're being quiet, just don't do anything.
+    if quiet:
+        return
     # Create the wrapped text.
     # By default, it will wrap at 70 characters.
     dedented_text = textwrap.dedent(s).strip()
@@ -577,7 +580,7 @@ def pretty_print (s, i = 0):
     # Failure
     elif i == 2:
         print "{0:>{1}}".format("[failed]", 79 - len(lines[-1]))
-    # Print the message
+    # qprint the message
     else:
         print text,
 
@@ -591,6 +594,9 @@ PROGRESS BAR
 ################################################################################
 '''
 def update_progress(progress=1):
+    # If we're being quiet, just don't do anything.
+    if quiet:
+        return
     # Modify this to change the length of the progress bar:
     barLength = 50
     status = ""
@@ -613,6 +619,21 @@ def update_progress(progress=1):
                                             24 - len(str(amount)) )
     sys.stdout.write(text)
     sys.stdout.flush()
+
+'''
+################################################################################
+QUIET PRINTING
+
+    Simply calls "print" if quiet == False; otherwise it just returns and
+    doesn't print.
+################################################################################
+'''
+def qprint(string=""):
+    if not quiet:
+        print string
+        return
+    else:
+        return
 
 '''
 ################################################################################

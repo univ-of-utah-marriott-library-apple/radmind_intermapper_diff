@@ -48,3 +48,6 @@ CHANGELOG
 1.7.3 - January 7, 2014
 	* Fixed some error reporting
 	* Bug fixes
+
+2.0.0 - February 10, 2014
+	* Migrated everything to Python
