@@ -11,11 +11,11 @@
 ## disparity and reports this back to the user in an easily-readable format.  ##
 ##                                                                            ##
 ################################################################################
-## COPYRIGHT (c) 2013 Marriott Library IT Services.  All Rights Reserved.     ##
+## COPYRIGHT (c) 2014 Marriott Library IT Services.  All Rights Reserved.     ##
 ##                                                                            ##
 ## Author:          Pierce Darragh - pierce.darragh@utah.edu                  ##
 ## Creation Date:   November 18, 2013                                         ##
-## Last Updated:    December  5, 2013                                         ##
+## Last Updated:    January  07, 2014                                         ##
 ##                                                                            ##
 ## Permission to use, copy, modify, and distribute this software and its      ##
 ## documentation for any purpose and without fee is hereby granted, provided  ##
@@ -28,6 +28,19 @@
 ##                                                                            ##
 ################################################################################
 
+## EXCLUSIONS
+# Radmind Exclusions
+# If you have an IP address in Radmind that you don't want to be monitored by
+# InterMapper, then put it into this array.  We have none, so... it's empty.
+declare -a rm_exclude=(
+                        )
+
+# InterMapper Exclusions
+# If you have an IP address that InterMapper monitors that you don't have in
+# Radmind and you never will, put it into this array.
+declare -a im_exclude=(
+                        )
+
 ## GLOBAL VARIABLE DECLARATION (CONFIGURATION)
 # Change these to accurately reflect your environment.
 RADMIND_CONFIG="/radmind_server_root/radmind/config"
@@ -35,16 +48,20 @@ INTERMAPPER_ADDRESS="https://intermapper.address/~admin/full_screen.html"
 INTERMAPPER_DEFAULT="./intermapper_list.html"
 
 ## OTHER VARIABLES (DON'T CHANGE)
+<<<<<<< HEAD
 VERSION="1.6.3"
+=======
+VERSION="1.7.3"
+>>>>>>> python
 OUTPUTTING=0
 
 ## COLORS
 # These are used for more user-friendly output.
+RS="\033[0m"
 FBRED="\033[1;91m"
 FBGRN="\033[1;92m"
 FBYEL="\033[1;93m"
 FBCYN="\033[1;96m"
-RS="\033[0m"
 
 ## MISCELLANEOUS FUNCTIONS
 # Prints specified number of dashes.
@@ -56,6 +73,33 @@ printd () {
         for (( i=0; i<$1; i++ )); do
             echo -en "-"
         done
+    fi
+}
+
+# Checks to make sure the specified extra exclusions are valid; that is, the
+# first part of the string is either 1 or 2 (Radmind or InterMapper,
+# respectively), and then the rest are IP addresses [0-9]+.[0-9]+.[0-9].[0-9]+
+check_exclusions () {
+    echo "Checking exclusions..."
+    echo "$1"
+    IFS='~,/' read -ra arr <<< "$1"
+    for item in ${arr[@]}; do
+        echo "$item"
+    done
+    echo "Checking input: ${arr[0]}"
+    if [[ "${arr[0]}" -ne 1 && "${arr[0]}" -ne 2 ]]; then
+        echo -e "${FBRED}ERROR:${RS} Bad exclusion option."
+        echo "       Please enter 1 (Radmind) or 2 (InterMapper) first."
+        exit 1
+    elif [[ "${arr[0]}" -eq 1 ]]; then
+        echo "Radmind Exclusion"
+        exit 0
+    elif [[ "${arr[0]}" -eq 2 ]]; then
+        echo "InterMapper Exclusion"
+        exit 0
+    else
+        echo "Uh-oh..."
+        exit 1
     fi
 }
 
@@ -94,27 +138,41 @@ usage () {
         echo -en " "
     done
     echo "[-s] (1|2)"
+    for (( i=0; i<"${#name}"; i++ )); do
+        echo -en " "
+    done
+    echo -en "        "
+    echo "[-e] (1|2);address1;address2;..."
     echo
-    echo "  h : display this help"
-    echo "  v : display the current version"
-    echo "  f : gives full output (lists all addresses found)"
-    echo "  g : only get the input addresses"
-    echo "  n : don't find the disparity between lists"
-    echo "  q : quiet mode - don't display the lists"
+    echo "  h : Display this help and quit."
+    echo "  v : Display the current version and quit."
+    echo "  f : Gives full output (lists all addresses found)."
+    #### ADD THIS
+    echo "  g : Only get the input addresses."
+    echo "  n : Don't find the disparity between the lists."
+    echo "  q : Quiet mode - don't output the lists to the console."
+    #### ADD THIS
+    echo "  E : List all built-in exclusions and quit."
     echo
-    echo "  c file : use 'file' as the Radmind config file"
-    echo "  i file : use 'file' as the InterMapper file"
-    echo "  o file : use 'file' as the output file"
-    echo "           Note: there is still console output"
+    echo "  c file : Use 'file' as the Radmind config file."
+    echo "  i file : Use 'file' as the InterMapper file."
+    echo "  I address : Use 'address' as the InterMapper web address."
+    echo "  o file : Use 'file' as the output destination file."
+    echo "           Note: there is still console output by default."
     echo
-    echo "  s # : only print one set of results"
+    echo "  s # : Only print one set of results:"
     echo "    1 : Radmind"
     echo "    2 : InterMapper"
+    echo
+    echo "  e #~address : Add 'address' as an exclusion to the # list."
+    echo "                Valid delimiters: ~ , /"
+    echo "    1         : Radmind"
+    echo "    2         : InterMapper"
 }
 
 ## OPTIONS
 # Switch for possible specified options.
-while getopts ":hvfnqc:i:o:s:" opt
+while getopts ":hvfnqc:i:I:o:s:e:" opt
 do
     case $opt in
     ## Options
@@ -144,20 +202,26 @@ do
     i)  # Specifies the InterMapper input file
         im_file="$OPTARG"
         ;;
+    I)  # Specifies the InterMapper web address manually
+        INTERMAPPER_ADDRESS="$OPTARG"
+        ;;
     o)  # Specifies an output file for the list of IPs
         output="$OPTARG"
         ;;
     s)  # Simple output (only one set of results)
         simple="$OPTARG"
         ;;
+    e)  # Specify exclusions
+        check_exclusions "${OPTARG}"
+        ;;
     ## Catches
     :)  # Some options require arguments - don't let the user forget them!
-        echo "ERROR: Option -$OPTARG requires an argument."
+        echo -e "${FBRED}ERROR:${RS} Option -$OPTARG requires an argument."
         usage
         exit 1
         ;;
     \?)  # Report non-working options
-        echo "ERROR: Invalid option: -$OPTARG"
+        echo -e "${FBRED}ERROR:${RS} Invalid option: -$OPTARG"
         usage
         exit 1
         ;;
@@ -172,12 +236,12 @@ done
 # Radmind config file
 if [[ -z "${rm_file}" ]]; then
     if [[ -f "${RADMIND_CONFIG}" ]]; then
-        rm_file=config
-    else
-        echo "ERROR: No Radmind config file specified or found."
-        usage
-        exit 1
+        rm_file="${RADMIND_CONFIG}"
     fi
+fi
+if [[ -z "${rm_file}" ]]; then
+    echo -e "${FBRED}ERROR:${RS} No Radmind config file specified or found."
+    exit 1
 fi
 # InterMapper device list
 if [[ -z "${im_file}" ]]; then
@@ -198,12 +262,16 @@ if [[ -z "${im_file}" ]]; then
             im_file="${INTERMAPPER_DEFAULT}"
         fi
     else
-        echo "Attempting to download InterMapper list from:"
-        echo -e "\t${INTERMAPPER_ADDRESS}"
+        echo -en "\rInterMapper address is..."
+        echo -e "\t\t\t${FBCYN}[${INTERMAPPER_ADDRESS}]${RS}"
+        echo -en "Downloading InterMapper list..."
         curl -so "${INTERMAPPER_DEFAULT}" "${INTERMAPPER_ADDRESS}"
         if [[ $? -ne 0 ]]; then
-            echo "ERROR: Curl failed.  Error code $?."
+            echo -e "\t\t\t${FBRED}[failed]${RS}"
+            echo -e "${FBRED}ERROR:${RS} Curl failed.  Error code $?."
             exit 1
+        else
+            echo -e "\t\t\t${FBGRN}[done]${RS}"
         fi
         if [[ `grep "is not authorized to access this document from" \
                "${INTERMAPPER_DEFAULT}"` ]]; then
@@ -217,7 +285,7 @@ fi
 # Make sure the option is either 1 or 2.
 if [[ -n "${simple}" ]]; then
     if [[ "${simple}" -ne 1 && "${simple}" -ne 2 ]]; then
-        echo "ERROR: Invalid simple option: ${simple}"
+        echo -e "${FBRED}ERROR:${RS} Invalid simple option: ${simple}"
         echo "Terminating..."
         exit 1
     fi
@@ -315,7 +383,7 @@ get_host () {
     if [[ "$1" =~ [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]]; then
         found_host=$(host -W 2 "$1" | cut -d ' ' -f 5 | cut -d '.' -f 1)
     else
-        echo "ERROR: Hostname formatting: \"$1\""
+        echo -e "${FBRED}ERROR:${RS} Hostname formatting: \"$1\""
         exit 1
     fi
 }
