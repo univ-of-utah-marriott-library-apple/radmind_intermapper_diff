@@ -63,6 +63,7 @@ IMPORTS
 '''
 import argparse
 import getpass
+import datetime
 import math
 import re
 import smtplib
@@ -229,10 +230,24 @@ def file_output (list1, list2):
     prompt = "Outputting to file [" + out_file + "]..."
     pretty_print (prompt)
 
-    sys.stdout = open (out_file, 'w')
+    global OUTPUTTING
+    OUTPUTTING = True
+
+    try:
+        sys.stdout = open (out_file, 'w')
+    except IOError as e:
+        pretty_print (prompt, 2)
+        qprint ()
+        qprint ("Error: " + e.strerror + ".")
+        sys.exit(5)
+    date = datetime.datetime.now().strftime('%Y-%m-%d at %X %Z')
+    qprint ("Generated " + date)
+    qprint ()
     output(list1, list2)
     sys.stdout = sys.__stdout__
     pretty_print (prompt, 1)
+
+    OUTPUTTING = False
 
 '''
 ################################################################################
@@ -260,11 +275,11 @@ def set_gvars ():
     global RM_FIRST     # Radmind first match: d in a.b.c.<d-e>
     global RM_LAST      # Radmind last match: e in a.b.c.<d-e>
 
-    IP_PATTERN = re.compile('\d+\.\d+\.\d+\.\d+')
-    RM_PATTERN = re.compile('\d+\.\d+\.\d+\.[^\s)]+')
-    RM_3       = re.compile('\d+\.\d+\.\d+\.')
-    RM_FIRST   = re.compile('<(\d+)')
-    RM_LAST    = re.compile('(\d+)>')
+    IP_PATTERN  = re.compile('\d+\.\d+\.\d+\.\d+')
+    RM_PATTERN  = re.compile('\d+\.\d+\.\d+\.[^\s)]+')
+    RM_3        = re.compile('\d+\.\d+\.\d+\.')
+    RM_FIRST    = re.compile('<(\d+)')
+    RM_LAST     = re.compile('(\d+)>')
 
     # ADDRESSES
     # Change these for your local environment!  It'll make your life easier.
@@ -279,8 +294,10 @@ def set_gvars ():
     # OTHER
     # DON'T CHANGE THESE
     global VERSION      # Current version of the script
+    global OUTPUTTING   # Whether we are currently outputting (used for prints)
 
-    VERSION = "2.1.1"
+    VERSION     = "2.1.2"
+    OUTPUTTING  = False
 
 '''
 ################################################################################
@@ -634,7 +651,7 @@ QUIET PRINTING
 ################################################################################
 '''
 def qprint(string=""):
-    if not quiet:
+    if OUTPUTTING or not quiet:
         print string
         return
     else:

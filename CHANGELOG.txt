@@ -56,3 +56,9 @@ CHANGELOG
 	* Added file output
 	* Removed all colorization for simplicity
 	* Began implementation of email (nothing works yet though)
+
+2.1.1 - February 11, 2014
+	* Fixed some documentation
+
+2.1.2 - February 11, 2014
+	* Added timestamp to output
