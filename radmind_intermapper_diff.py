@@ -63,12 +63,15 @@ import argparse
 import getpass
 import math
 import re
+import smtplib
 import socket
 import subprocess
 import sys
 import textwrap
 import traceback
 import urllib2
+
+from email.mime.text import MIMEText
 
 '''
 ################################################################################
@@ -101,14 +104,17 @@ def main ():
 
     # If the user specified the explicit option, show all of the variables used.
     if explicit:
-        qprint ("\nThese variables were used:")
-        qprint ("\t{:10} : {}".format('full', full))
-        qprint ("\t{:10} : {}".format('quiet', quiet))
-        qprint ("\t{:10} : {}".format('im_file', im_file))
-        qprint ("\t{:10} : {}".format('im_address', im_address))
-        qprint ("\t{:10} : {}".format('rm_file', rm_file))
-        qprint ("\t{:10} : {}".format('out_file', out_file))
-        qprint ()
+        print "\nThese variables were used:"
+        print "\t{:10} : {}".format('full', full)
+        print "\t{:10} : {}".format('quiet', quiet)
+        print "\t{:10} : {}".format('explicit', explicit)
+        print "\t{:10} : {}".format('dns_full', dns_full)
+        print "\t{:10} : {}".format('rm_file', rm_file)
+        print "\t{:10} : {}".format('im_file', im_file)
+        if not im_file:
+            print "\t{:10} : {}".format('im_address', im_address)
+        print "\t{:10} : {}".format('out_file', out_file)
+        print
 
     # Get the list of Radmind IPs
     rm_list = get_radmind()
@@ -175,42 +181,39 @@ def main ():
     im_diff = differences(im_sorted, rm_sorted)
 
     if out_file:
-        file_output()
+        file_output(rm_diff, im_diff)
 
     if not quiet:
         qprint ("\n")
         if full:
-            # Full console output
-            qprint ("Radmind items (" + str(len(rm_stuff)) + "):")
-            for item in rm_sorted:
-                if not item[1] == "False":
-                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), item[1]))
-                else:
-                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS))
-
-            qprint ()
-            qprint ("InterMapper items (" + str(len(im_stuff)) + "):")
-            for item in im_sorted:
-                if not item[1] == "False":
-                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), item[1]))
-                else:
-                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS))
+            output (rm_sorted, im_sorted)
         else:
-            # Differences console output
-            qprint ("Radmind items (" + str(len(rm_diff)) + "):")
-            for item in rm_diff:
-                if not item[1] == "False":
-                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), item[1]))
-                else:
-                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS))
+            output (rm_diff, im_diff)
 
-            qprint ()
-            qprint ("InterMapper items (" + str(len(im_diff)) + "):")
-            for item in im_diff:
-                if not item[1] == "False":
-                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), item[1]))
-                else:
-                    qprint ("  {0:<{1}} {2}".format(item[0], (longest + 2), FBYEL + "No DNS Entry" + RS))
+'''
+################################################################################
+OUTPUT
+
+    Outputs the given lists in order, with their IP addresses and hostnames
+    spaced out for easy reading.  Any IP addresses with empty hostnames will
+    display "No DNS Entry" (optionally in yellow).
+################################################################################
+'''
+def output (list1, list2):
+    qprint ("Radmind items (" + str(len(list1)) + "):")
+    for item in list1:
+        if not item[1] == "False":
+            qprint ("  {0:<{1}} {2}".format(item[0], (22), item[1]))
+        else:
+            qprint ("  {0:<{1}} {2}".format(item[0], (22), ""))
+
+    qprint ()
+    qprint ("InterMapper items (" + str(len(list2)) + "):")
+    for item in list2:
+        if not item[1] == "False":
+            qprint ("  {0:<{1}} {2}".format(item[0], (22), item[1]))
+        else:
+            qprint ("  {0:<{1}} {2}".format(item[0], (22), ""))
 
 '''
 ################################################################################
@@ -220,9 +223,25 @@ OUTPUT TO FILE
     formatting and writing of that file.
 ################################################################################
 '''
-def file_output ():
-    qprint ("Outputting to file...")
-    return
+def file_output (list1, list2):
+    prompt = "Outputting to file [" + out_file + "]..."
+    pretty_print (prompt)
+
+    sys.stdout = open (out_file, 'w')
+    output(list1, list2)
+    sys.stdout = sys.__stdout__
+    pretty_print (prompt, 1)
+
+'''
+################################################################################
+EMAIL RESULTS
+
+    Sends the results (as they would appear in file_output()) to the email
+    address specified in email_address.
+################################################################################
+'''
+def send_mail ():
+    qprint ("Sending email...")
 
 '''
 ################################################################################
@@ -245,28 +264,15 @@ def set_gvars ():
     RM_FIRST   = re.compile('<(\d+)')
     RM_LAST    = re.compile('(\d+)>')
 
-    # COLORS
-    global RS       # Reset color settings
-    global FBRED    # Foreground bright red
-    global FBGRN    # Foreground bright green
-    global FBYEL    # Foreground bright yellow
-    global FBCYN    # Foreground bright cyan
-    global CARET    # Carriage return
-
-    RS    = "\033[0m"
-    FBRED = "\033[1;91m"
-    FBGRN = "\033[1;92m"
-    FBYEL = "\033[1;93m"
-    FBCYN = "\033[1;96m"
-    CARET = "\r\033[K"
-
     # ADDRESSES
     # Change these for your local environment!  It'll make your life easier.
     global RADMIND_CONFIG       # Default location of Radmind config file
     global INTERMAPPER_ADDRESS  # Default web address of InterMapper full list
+    global EMAIL_ADDRESS        # Default email address for emailed output
 
     RADMIND_CONFIG      = "/radmind_server_root/radmind/config"
     INTERMAPPER_ADDRESS = "https://intermapper.address/~admin/full_screen.html"
+    EMAIL_ADDRESS       = "root@localhost"
 
     # OTHER
     # DON'T CHANGE THESE
@@ -489,11 +495,11 @@ PARSE FOR OPTIONS
         -f, --full
         -q, --quiet
         -x, --explicit
-        -d, --dns_full
+        -d, --dns-full
 
-        -r, --radmind_file 'file'
-        -i, --intermapper_file 'file'
-        -I, --intermapper_address 'address'
+        -r, --radmind-file 'file'
+        -i, --intermapper-file 'file'
+        -I, --intermapper-address 'address'
         -o, --output 'file'
 ################################################################################
 '''
@@ -503,7 +509,8 @@ def parse_options ():
 
     parser.add_argument("-v", "--version",
                         help="display the current version and quit",
-                        action="store_true")
+                        action='version',
+                        version='%(prog)s ' + VERSION)
     parser.add_argument("-f", "--full",
                         help="gives full output",
                         action="store_true")
@@ -511,23 +518,24 @@ def parse_options ():
                         help="don't output the lists",
                         action="store_true")
     parser.add_argument("-x", "--explicit",
-                        help="show all declared variables at run-time",
+                        help="show all declared variables at run-time (overrides -q)",
                         action="store_true")
-    parser.add_argument("-d", "--dns_full",
+    parser.add_argument("-d", "--dns-full",
                         help="leave the full DNS names intact",
+                        dest='dns_full',
                         action="store_true")
 
-    parser.add_argument("-r", "--radmind_file",
+    parser.add_argument("-r", "--radmind-file",
                         help="use 'file' as Radmind config file",
                         metavar='\'file\'',
                         dest='rm_file',
                         default=RADMIND_CONFIG)
-    parser.add_argument("-i", "--intermapper_file",
+    parser.add_argument("-i", "--intermapper-file",
                         help="use 'file' as InterMapper file",
                         metavar='\'file\'',
                         dest='im_file',
                         default=None)
-    parser.add_argument("-I", "--intermapper_address",
+    parser.add_argument("-I", "--intermapper-address",
                         help="use 'address' to get InterMapper list",
                         metavar='\'address\'',
                         dest='im_address',
@@ -540,11 +548,6 @@ def parse_options ():
 
     # Make all arguments globally accessible
     globals().update(vars(parser.parse_args()))
-
-    # -v: Display version information and quit
-    if version:
-        qprint ("{}".format(VERSION))
-        sys.exit(0)
 
 '''
 ################################################################################
