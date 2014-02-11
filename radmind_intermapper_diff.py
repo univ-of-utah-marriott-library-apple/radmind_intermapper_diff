@@ -20,9 +20,9 @@ Command-line options available:
   -h : display help information and quit
   -v : display version information and quit
   -f : give full output (prints all addresses)
-  -q : suppress output to the console (nice for file output)
+  -q : suppress output to the console (nice for autmated runnings)
   -x : lists all declared variables at the beginning of runtime
-  -E : list all built-in exclusions and quit
+  -d : leaves the full DNS names intact (shortname.other.stuff.here)
 
   -r 'file' : use 'file' as Radmind config file
   -i 'file' : use 'file' as InterMapper address list
@@ -30,7 +30,9 @@ Command-line options available:
   -o 'file' : use 'file' as the output destination file
               Note: there is still console output by default!
 
-  -s # : only qprint one set of results:
+UNIMPLEMENTED
+  -E : list all built-in exclusions and quit
+  -s # : only print one set of results:
      1 : Radmind
      2 : InterMapper
 
@@ -40,7 +42,7 @@ COPYRIGHT (c) 2014 Marriott Library IT Services.  All Rights Reserved.
 
 Author:          Pierce Darragh - pierce.darragh@utah.edu
 Creation Date:   November 18, 2013
-Last Updated:    February 10, 2014
+Last Updated:    February 11, 2014
 
 Permission to use, copy, modify, and distribute this software and its
 documentation for any purpose and without fee is hereby granted, provided that
@@ -278,7 +280,7 @@ def set_gvars ():
     # DON'T CHANGE THESE
     global VERSION      # Current version of the script
 
-    VERSION = "2.0.0"
+    VERSION = "2.1.1"
 
 '''
 ################################################################################
