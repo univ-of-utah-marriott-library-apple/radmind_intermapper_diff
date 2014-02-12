@@ -23,12 +23,17 @@ Command-line options available:
   -q : suppress output to the console (nice for autmated runnings)
   -x : lists all declared variables at the beginning of runtime
   -d : leaves the full DNS names intact (shortname.other.stuff.here)
+  -e : specifies whether to send an email (usually used for defaults)
 
-  -r 'file' : use 'file' as Radmind config file
-  -i 'file' : use 'file' as InterMapper address list
-  -I 'address' : use 'address' as InterMapper web address
-  -o 'file' : use 'file' as the output destination file
-              Note: there is still console output by default!
+  -r 'file'     : use 'file' as Radmind config file
+  -i 'file'     : use 'file' as InterMapper address list
+  -I 'address'  : use 'address' as InterMapper web address
+  -o 'file'     : use 'file' as the output destination file
+                  Note: there is still console output by default!
+
+  --smtp-server 'address'   : use 'address' as the smtp server for sending mail
+  --email-address 'address' : use 'address' as the recipient of the email
+  --source-email 'address'  : use 'address' as the sender of the email
 
 UNIMPLEMENTED
   -E : list all built-in exclusions and quit
@@ -97,27 +102,14 @@ MAIN
     5.1.      Radmind positive disparity (Radmind has, InterMapper doesn't)
     5.2.      InterMapper positive dispairty (InterMapper has, Radmind doesn't)
     6.      File output
-    7.      Console output
+    7.      Email output
+    8.      Console output
 ################################################################################
 '''
 def main ():
     # Initialization
     set_gvars()
     parse_options()
-
-    # If the user specified the explicit option, show all of the variables used.
-    if explicit:
-        print "\nThese variables were used:"
-        print "\t{:10} : {}".format('full', full)
-        print "\t{:10} : {}".format('quiet', quiet)
-        print "\t{:10} : {}".format('explicit', explicit)
-        print "\t{:10} : {}".format('dns_full', dns_full)
-        print "\t{:10} : {}".format('rm_file', rm_file)
-        print "\t{:10} : {}".format('im_file', im_file)
-        if not im_file:
-            print "\t{:10} : {}".format('im_address', im_address)
-        print "\t{:10} : {}".format('out_file', out_file)
-        print
 
     # Get the list of Radmind IPs
     rm_list = get_radmind()
@@ -133,24 +125,18 @@ def main ():
     # Get the hostnames for Radmind IPs
     qprint ("Getting Radmind hostnames...")
     rm_stuff = {}
-    rm_longest = 0
     for i in range(0, len(rm_list)):
         update_progress(i/float(len(rm_list)))
         item = rm_list[i]
-        if len(item) > rm_longest:
-            rm_longest = len(item)
         rm_stuff[item] = str(get_host(item)).replace("'", "")
     update_progress()
 
     # Get the hostnames for InterMapper IPs
     qprint ("Getting InterMapper hostnames...")
     im_stuff = {}
-    im_longest = 0
     for i in range(0, len(im_list)):
         update_progress(i/float(len(im_list)))
         item = im_list[i]
-        if len(item) > im_longest:
-            im_longest = len(item)
         im_stuff[item] = str(get_host(item)).replace("'", "")
     update_progress()
 
@@ -174,8 +160,6 @@ def main ():
     except:
         traceback.print_exc(file=sys.stdout)
 
-    longest = rm_longest if (rm_longest > im_longest) else im_longest
-
     # Find the Radmind positive disparities
     qprint ("Finding Radmind positive disparity...")
     rm_diff = differences(rm_sorted, im_sorted)
@@ -183,40 +167,47 @@ def main ():
     qprint ("Finding InterMapper positive disparity...")
     im_diff = differences(im_sorted, rm_sorted)
 
+    prep_output (rm_diff, im_diff)
+
     if out_file:
-        file_output(rm_diff, im_diff)
+        file_output ()
+
+    if email:
+        send_email ()
 
     if not quiet:
         qprint ("\n")
         if full:
-            output (rm_sorted, im_sorted)
+            prep_output (rm_sorted, im_sorted)
+            print (OUTPUT_TEXT)
         else:
-            output (rm_diff, im_diff)
+            print (OUTPUT_TEXT)
 
 '''
 ################################################################################
-OUTPUT
+PREPARE OUTPUT
 
     Outputs the given lists in order, with their IP addresses and hostnames
     spaced out for easy reading.  Any IP addresses with empty hostnames will
     display "No DNS Entry" (optionally in yellow).
 ################################################################################
 '''
-def output (list1, list2):
-    qprint ("Radmind items (" + str(len(list1)) + "):")
+def prep_output (list1, list2):
+    global OUTPUT_TEXT
+    OUTPUT_TEXT = "Radmind items (" + str(len(list1)) + "):"
     for item in list1:
         if not item[1] == "False":
-            qprint ("  {0:<{1}} {2}".format(item[0], (22), item[1]))
+            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), item[1])
         else:
-            qprint ("  {0:<{1}} {2}".format(item[0], (22), ""))
+            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), "")
 
-    qprint ()
-    qprint ("InterMapper items (" + str(len(list2)) + "):")
+    OUTPUT_TEXT += '\n'
+    OUTPUT_TEXT += "\nInterMapper items (" + str(len(list2)) + "):"
     for item in list2:
         if not item[1] == "False":
-            qprint ("  {0:<{1}} {2}".format(item[0], (22), item[1]))
+            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), item[1])
         else:
-            qprint ("  {0:<{1}} {2}".format(item[0], (22), ""))
+            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), "")
 
 '''
 ################################################################################
@@ -226,12 +217,10 @@ OUTPUT TO FILE
     formatting and writing of that file.
 ################################################################################
 '''
-def file_output (list1, list2):
+# def file_output (list1, list2):
+def file_output ():
     prompt = "Outputting to file [" + out_file + "]..."
     pretty_print (prompt)
-
-    global OUTPUTTING
-    OUTPUTTING = True
 
     try:
         sys.stdout = open (out_file, 'w')
@@ -239,15 +228,13 @@ def file_output (list1, list2):
         pretty_print (prompt, 2)
         qprint ()
         qprint ("Error: " + e.strerror + ".")
-        sys.exit(5)
+        sys.exit(21)
     date = datetime.datetime.now().strftime('%Y-%m-%d at %X %Z')
-    qprint ("Generated " + date)
-    qprint ()
-    output(list1, list2)
+    print "Generated " + date
+    print
+    print OUTPUT_TEXT
     sys.stdout = sys.__stdout__
     pretty_print (prompt, 1)
-
-    OUTPUTTING = False
 
 '''
 ################################################################################
@@ -257,8 +244,30 @@ EMAIL RESULTS
     address specified in email_address.
 ################################################################################
 '''
-def send_mail ():
-    qprint ("Sending email...")
+def send_email ():
+    prompt = "Sending email to [" + destination_email + "]..."
+    pretty_print (prompt)
+
+    # Get date
+    short_date = datetime.datetime.now().strftime('%A, %B %d')
+    full_date = datetime.datetime.now().strftime('%Y-%m-%d at %X %Z')
+
+    # Create message container
+    msg = MIMEText("Generated " + full_date + "\n\n" + OUTPUT_TEXT)
+    msg['Subject'] = "Radmind/Intermapper Differences " + short_date
+    msg['From'] = source_email
+    msg['To'] = destination_email
+
+    try:
+        s = smtplib.SMTP(smtp_server)
+        s.sendmail(msg['From'], [msg['To']], msg.as_string())
+        s.quit
+        pretty_print (prompt, 1)
+    except socket.error as e:
+        pretty_print (prompt, 2)
+        qprint ()
+        qprint ("Error: " + str(e) + ".")
+        sys.exit(30)
 
 '''
 ################################################################################
@@ -285,19 +294,24 @@ def set_gvars ():
     # Change these for your local environment!  It'll make your life easier.
     global RADMIND_CONFIG       # Default location of Radmind config file
     global INTERMAPPER_ADDRESS  # Default web address of InterMapper full list
-    global EMAIL_ADDRESS        # Default email address for emailed output
+    global SMTP_SERVER          # Default SMTP server address
+    global DESTINATION_EMAIL    # Default send-to address for email
+    global SOURCE_EMAIL         # Default sent-from address for email
 
     RADMIND_CONFIG      = "/radmind_server_root/radmind/config"
     INTERMAPPER_ADDRESS = "https://intermapper.address/~admin/full_screen.html"
-    EMAIL_ADDRESS       = "root@localhost"
+    SMTP_SERVER         = "smtp@yourdomain"
+    DESTINATION_EMAIL   = "root@localhost"
+    SOURCE_EMAIL        = "radmind_intermapper_diff.py@localhost"
 
     # OTHER
     # DON'T CHANGE THESE
     global VERSION      # Current version of the script
-    global OUTPUTTING   # Whether we are currently outputting (used for prints)
+    global OUTPUT_TEXT  # Stores all the text (so it can be outputted multiple
+                        # times easily)
 
-    VERSION     = "2.1.2"
-    OUTPUTTING  = False
+    VERSION     = "2.2.0"
+    OUTPUT_TEXT = ''
 
 '''
 ################################################################################
@@ -388,7 +402,7 @@ def im_authenticate ():
     except:
         pretty_print(prompt, 2)
         qprint ("Something went wrong during authentication.  Quitting...")
-        sys.exit(1)
+        sys.exit(11)
 
 '''
 ################################################################################
@@ -421,12 +435,12 @@ def get_intermapper_web ():
             message = "Error:  The address could not be accessed."
             pretty_print (message)
             qprint ()
-            qprint ("Reason:", e.reason)
-            sys.exit(1)
+            qprint ("Reason: " + str(e.reason))
+            sys.exit(10)
         except Exception as e:
             pretty_print (prompt, 2)
-            print e.print_stack()
-            sys.exit(1)
+            print e
+            sys.exit(10)
 
     matches = IP_PATTERN.findall(page)
     return matches
@@ -485,9 +499,6 @@ CHECK FILE LEGITIMACY
     message and quit.
 ################################################################################
 '''
-## CHECK FILE LEGITIMACY
-# Determines whether an inputted file is able to be opened.  If not,
-# qprint the error message.
 def legit_file (location, switch, prompt = ''):
     try:
         with open(location) as f:
@@ -496,12 +507,12 @@ def legit_file (location, switch, prompt = ''):
         if prompt:
             pretty_print (prompt, 2)
         qprint ()
-        qprint ("Error:", e.strerror + ".")
+        qprint ("Error: " + e.strerror + ".")
         if switch == "im":
             qprint ("Try using the [-i] switch to specify the file manually.")
         elif switch == "rm":
             qprint ("Try using the [-r] switch to specify the file manually.")
-        sys.exit(1)
+        sys.exit(20)
 
 '''
 ################################################################################
@@ -515,11 +526,15 @@ PARSE FOR OPTIONS
         -q, --quiet
         -x, --explicit
         -d, --dns-full
+        -e, --email
 
         -r, --radmind-file 'file'
         -i, --intermapper-file 'file'
         -I, --intermapper-address 'address'
         -o, --output 'file'
+            --smtp-server
+            --email-address
+            --source-email
 ################################################################################
 '''
 def parse_options ():
@@ -543,6 +558,10 @@ def parse_options ():
                         help="leave the full DNS names intact",
                         dest='dns_full',
                         action="store_true")
+    parser.add_argument("-e", "--email",
+                        help="send an email to the default address",
+                        dest='email',
+                        action='store_true')
 
     parser.add_argument("-r", "--radmind-file",
                         help="use 'file' as Radmind config file",
@@ -564,9 +583,43 @@ def parse_options ():
                         metavar='\'file\'',
                         dest='out_file',
                         default=None)
+    parser.add_argument("--smtp-server",
+                        help="set the SMTP server to 'address'",
+                        metavar='\'address\'',
+                        dest='smtp_server',
+                        default=SMTP_SERVER)
+    parser.add_argument("--email-address",
+                        help="send output in an email to 'address'",
+                        metavar='\'address\'',
+                        dest='destination_email',
+                        default=DESTINATION_EMAIL)
+    parser.add_argument("--source-email",
+                        help="change the source of the emailed message to 'address'",
+                        metavar='\'address\'',
+                        dest='source_email',
+                        default=SOURCE_EMAIL)
 
     # Make all arguments globally accessible
     globals().update(vars(parser.parse_args()))
+
+    # If the user specified the explicit option, show all of the variables used.
+    if explicit:
+        print
+        print "These variables were used:"
+        print "  {:20} : {}".format('full', full)
+        print "  {:20} : {}".format('quiet', quiet)
+        print "  {:20} : {}".format('explicit', explicit)
+        print "  {:20} : {}".format('dns_full', dns_full)
+        print "  {:20} : {}".format('email', email)
+
+        print "  {:20} : {}".format('rm_file', rm_file)
+        print "  {:20} : {}".format('im_file', im_file)
+        print "  {:20} : {}".format('im_address', im_address)
+        print "  {:20} : {}".format('out_file', out_file)
+        print "  {:20} : {}".format('smtp_server', smtp_server)
+        print "  {:20} : {}".format('destination_email', destination_email)
+        print "  {:20} : {}".format('source_email', source_email)
+        print
 
 '''
 ################################################################################
@@ -635,10 +688,10 @@ def update_progress(progress=1):
         status = "  [done]\r\n"
     amount = math.ceil(progress*1000)/10
     block = int(round(barLength*progress))
-    text = "\r    [{0}] {1:>5}%{2:>{3}}".format( "#"*block + "-"*(barLength-block),
-                                            amount,
-                                            status,
-                                            24 - len(str(amount)) )
+    text = "\r    [{0}] {1:>5}%{2:>{3}}".format("#"*block + "-"*(barLength-block),
+                                                amount,
+                                                status,
+                                                24 - len(str(amount)))
     sys.stdout.write(text)
     sys.stdout.flush()
 
@@ -651,7 +704,7 @@ QUIET PRINTING
 ################################################################################
 '''
 def qprint(string=""):
-    if OUTPUTTING or not quiet:
+    if not quiet:
         print string
         return
     else:
