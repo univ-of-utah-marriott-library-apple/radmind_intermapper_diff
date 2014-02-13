@@ -70,3 +70,6 @@ CHANGELOG
 2.2.0 - February 11, 2014
 	* Mail sending now!
 	* Bug fixes
+
+2.2.1 - February 12, 2014
+	* Completely changed help text formatting

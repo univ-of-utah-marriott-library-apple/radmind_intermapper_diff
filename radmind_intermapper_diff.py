@@ -70,6 +70,7 @@ import argparse
 import getpass
 import datetime
 import math
+import os
 import re
 import smtplib
 import socket
@@ -539,63 +540,45 @@ PARSE FOR OPTIONS
 '''
 def parse_options ():
     # Add arguments to the parser.
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(add_help=False)
 
+    parser.add_argument("-h", "--help",
+                        action=usage())
     parser.add_argument("-v", "--version",
-                        help="display the current version and quit",
                         action='version',
                         version='%(prog)s ' + VERSION)
     parser.add_argument("-f", "--full",
-                        help="gives full output",
                         action="store_true")
     parser.add_argument("-q", "--quiet",
-                        help="don't output the lists",
                         action="store_true")
     parser.add_argument("-x", "--explicit",
-                        help="show all declared variables at run-time (overrides -q)",
                         action="store_true")
     parser.add_argument("-d", "--dns-full",
-                        help="leave the full DNS names intact",
                         dest='dns_full',
                         action="store_true")
     parser.add_argument("-e", "--email",
-                        help="send an email to the default address",
                         dest='email',
                         action='store_true')
 
     parser.add_argument("-r", "--radmind-file",
-                        help="use 'file' as Radmind config file",
-                        metavar='\'file\'',
                         dest='rm_file',
                         default=RADMIND_CONFIG)
     parser.add_argument("-i", "--intermapper-file",
-                        help="use 'file' as InterMapper file",
                         metavar='\'file\'',
-                        dest='im_file',
                         default=None)
     parser.add_argument("-I", "--intermapper-address",
-                        help="use 'address' to get InterMapper list",
-                        metavar='\'address\'',
                         dest='im_address',
                         default=INTERMAPPER_ADDRESS)
     parser.add_argument("-o", "--output",
-                        help="use 'file' to record results",
-                        metavar='\'file\'',
                         dest='out_file',
                         default=None)
     parser.add_argument("--smtp-server",
-                        help="set the SMTP server to 'address'",
-                        metavar='\'address\'',
                         dest='smtp_server',
                         default=SMTP_SERVER)
     parser.add_argument("--email-address",
-                        help="send output in an email to 'address'",
-                        metavar='\'address\'',
                         dest='destination_email',
                         default=DESTINATION_EMAIL)
     parser.add_argument("--source-email",
-                        help="change the source of the emailed message to 'address'",
-                        metavar='\'address\'',
                         dest='source_email',
                         default=SOURCE_EMAIL)
 
@@ -620,6 +603,102 @@ def parse_options ():
         print "  {:20} : {}".format('destination_email', destination_email)
         print "  {:20} : {}".format('source_email', source_email)
         print
+
+'''
+################################################################################
+USAGE
+
+    The -h and --help options will display useful information on the various
+    options available to the user.
+
+    Primarily this function exists so that I can exert control over the
+    formatting of the output, since I didn't like how argparse handled the
+    output by default.
+################################################################################
+'''
+def usage (quit_code=0):
+    name = os.path.basename(__file__)
+
+    description = '''Finds the IP addresses that exist in a Radmind
+configuration file and an InterMapper report and then determines the
+disparity between the two.  This information is then reported back to the
+user, and can optionally be stored in a text file or emailed.'''
+
+    desc = textwrap.fill(textwrap.dedent(description).strip(),
+                         initial_indent='  ',
+                         subsequent_indent='  ',
+                         width=80)
+
+    switches = []
+    switches.append(['-h, --help', "show this help message and exit"])
+    switches.append(['-v, --version', "display the current version and exit"])
+    switches.append(['-f, --full', "give full output"])
+    switches.append(['-q, --quiet', "suppress console output"])
+    switches.append(['-x, --explicit', "show all declared variables at run-time (overrides -q)"])
+    switches.append(['-d, --dns-full', "leave the full DNS names intact"])
+    switches.append(['-e, --email', "send an email to the default address"])
+
+    switches_length = 0
+    for item in switches:
+        if len(item[0]) > switches_length:
+            switches_length = len(item[0])
+
+    positionals = []
+    positionals.append(['-r, --radmind-file \'file\'', "use 'file' as the Radmind configuration file"])
+    positionals.append(['-i, --intermapper-file \'file\'', "use 'file' as the InterMapper list of addresses"])
+    positionals.append(['-I, --intermapper-address \'address\'', "use 'address' as the InterMapper connection address (to get freshest results)"])
+    positionals.append(['-o, --output \'file\'', "output the results to 'file'"])
+    positionals.append(['    --smtp-server \'address\'', "set the SMTP server to 'address' (for sending mail)"])
+    positionals.append(['    --email-address \'address\'', "send output in an email to 'address'"])
+    positionals.append(['    --source-email', "send output in an email from 'address'"])
+
+    positionals_length = 0
+    for item in positionals:
+        if len(item[0]) > positionals_length:
+            positionals_length = len(item[0])
+
+    examples = []
+    examples.append(name + ''' -r config.txt -I "https://intermapper.domain.com"
+
+    Fetches the Radmind config from 'config.txt' and the InterMapper list from
+    'https://intermapper.domain.com'.  This will output the list of differences
+    and then quit.''')
+    examples.append(name + ''' -r config.txt -i intermapper.txt -o output.txt
+
+    Gets the InterMapper list from 'intermapper.txt' instead of online.  The
+    list of differences is then outputted to 'output.txt' as well as to the
+    console.''')
+
+    print name
+    print desc
+    print
+
+    print "Optional arguments:"
+    for item in switches:
+        print "  {0:<{1}}  {2}".format(item[0], switches_length, item[1])
+    print
+    for item in positionals:
+        print "  {0:<{1}} ".format(item[0], positionals_length),
+
+        new_width = 80 - positionals_length - 4
+        help_text = textwrap.fill(textwrap.dedent(item[1]).strip(),
+                                  initial_indent='',
+                                  subsequent_indent='',
+                                  width=new_width)
+        lines = []
+        for line in help_text.split('\n'):
+            lines.append(line)
+        print lines[0]
+        for i in range (1, len(lines)):
+            print "{0:<{1}}{2}".format('', new_width - 2, lines[i])
+
+    print
+    print "Usage examples:"
+    for item in examples:
+        print
+        print item
+
+    sys.exit(quit_code)
 
 '''
 ################################################################################
@@ -655,7 +734,7 @@ def pretty_print (s, i = 0):
     # Failure
     elif i == 2:
         print "{0:>{1}}".format("[failed]", 79 - len(lines[-1]))
-    # qprint the message
+    # Print the message
     else:
         print text,
 
