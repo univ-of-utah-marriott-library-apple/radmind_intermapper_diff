@@ -15,7 +15,7 @@ back to the user in an easily-readable format.
 
 DETAILED USAGE INSTRUCTIONS
 
-Command-line options available:
+Optional arguments:
 
   -h : display help information and quit
   -v : display version information and quit
@@ -35,7 +35,38 @@ Command-line options available:
   --email-address 'address' : use 'address' as the recipient of the email
   --source-email 'address'  : use 'address' as the sender of the email
 
-UNIMPLEMENTED
+Usage examples:
+
+%(PROG)s -r config.txt -I "https://intermapper.domain.com"
+
+    Fetches the Radmind config from 'config.txt' and the InterMapper list from
+    'https://intermapper.domain.com'.  This will output the list of differences
+    and then quit.
+
+%(PROG) -r config.txt -i intermapper.txt -o output.txt
+
+    Gets the InterMapper list from 'intermapper.txt' instead of online.  The
+    list of differences is then outputted to 'output.txt' as well as to the
+    console.
+
+%(PROG) -r config.txt -i intermapper.txt -o output.txt -qe
+
+    After finding the differences, this will suppress console output (the user
+    will not see anything), but will place the output into a text file
+    'output.txt' and then attempt to email the list using the default email
+    settings.
+
+%(PROG) -r config.txt -i intermapper.txt --smtp-server "smtp.domain.com"
+  --email-address "recipient@domain.com" --source-email "PROG@domain.com" -qdx
+  
+    After finding the differences, this will suppress console output.  The list
+    will be send via email from 'PROG@domain.com' to 'recipient@domain.com'
+    using the SMTP server 'smtp.domain.com'.  The DNS mappings will be left in
+    their unaltered states ('computer.tech.domain.com' vs 'computer'), and the
+    program will display a list of all variables used at the beginning of
+    execution.
+
+UNIMPLEMENTED OPTIONS (TO-DO)
   -E : list all built-in exclusions and quit
   -s # : only print one set of results:
      1 : Radmind
@@ -81,6 +112,167 @@ import traceback
 import urllib2
 
 from email.mime.text import MIMEText
+
+'''
+################################################################################
+DEFINE GLOBAL VARIABLES
+
+    A few variables are used throughout this script, and they are defined here.
+################################################################################
+'''
+def set_gvars ():
+    # REGEX PATTERNS
+    global IP_PATTERN   # Generic IP address
+    global RM_PATTERN   # Radmind shorthand addresses: a.b.c.<d-e>
+    global RM_3         # Radmind three-deep match: 'a.b.c.'
+    global RM_FIRST     # Radmind first match: d in a.b.c.<d-e>
+    global RM_LAST      # Radmind last match: e in a.b.c.<d-e>
+
+    IP_PATTERN  = re.compile('\d+\.\d+\.\d+\.\d+')
+    RM_PATTERN  = re.compile('\d+\.\d+\.\d+\.[^\s)]+')
+    RM_3        = re.compile('\d+\.\d+\.\d+\.')
+    RM_FIRST    = re.compile('<(\d+)')
+    RM_LAST     = re.compile('(\d+)>')
+
+    # ADDRESSES
+    # Change these for your local environment!  It'll make your life easier.
+    global RADMIND_CONFIG       # Default location of Radmind config file
+    global INTERMAPPER_ADDRESS  # Default web address of InterMapper full list
+    global SMTP_SERVER          # Default SMTP server address
+    global DESTINATION_EMAIL    # Default send-to address for email
+    global SOURCE_EMAIL         # Default sent-from address for email
+
+    RADMIND_CONFIG      = "/radmind_server_root/radmind/config"
+    INTERMAPPER_ADDRESS = "https://intermapper.address/~admin/full_screen.html"
+    SMTP_SERVER         = "smtp@yourdomain"
+    DESTINATION_EMAIL   = "root@localhost"
+    SOURCE_EMAIL        = "radmind_intermapper_diff.py@localhost"
+
+    # OTHER
+    # DON'T CHANGE THESE
+    global VERSION      # Current version of the script
+    global OUTPUT_TEXT  # Stores all the text (so it can be outputted multiple
+                        # times easily)
+
+    VERSION     = "2.2.2"
+    OUTPUT_TEXT = ''
+
+'''
+################################################################################
+USAGE
+
+    The -h and --help options will display useful information on the various
+    options available to the user.
+
+    Primarily this function exists so that I can exert control over the
+    formatting of the output, since I didn't like how argparse handled the
+    output by default.
+################################################################################
+'''
+def usage (quit_code=0):
+    name = os.path.basename(__file__)
+
+    description = '''Finds the IP addresses that exist in a Radmind
+configuration file and an InterMapper report and then determines the
+disparity between the two.  This information is then reported back to the
+user, and can optionally be stored in a text file or emailed.'''
+
+    desc = textwrap.fill(textwrap.dedent(description).strip(),
+                         initial_indent='  ',
+                         subsequent_indent='  ',
+                         width=80)
+
+    switches = []
+    switches.append(['-h, --help', "show this help message and exit"])
+    switches.append(['-v, --version', "display the current version and exit"])
+    switches.append(['-f, --full', "give full output"])
+    switches.append(['-q, --quiet', "suppress console output"])
+    switches.append(['-x, --explicit', "show all declared variables at run-time (overrides -q)"])
+    switches.append(['-d, --dns-full', "leave the full DNS names intact"])
+    switches.append(['-e, --email', "send an email to the default address"])
+
+    switches_length = 0
+    for item in switches:
+        if len(item[0]) > switches_length:
+            switches_length = len(item[0])
+
+    positionals = []
+    positionals.append(['-r, --radmind-file \'file\'', "use 'file' as the Radmind configuration file"])
+    positionals.append(['-i, --intermapper-file \'file\'', "use 'file' as the InterMapper list of addresses"])
+    positionals.append(['-I, --intermapper-address \'address\'', "use 'address' as the InterMapper connection address (to get freshest results)"])
+    positionals.append(['-o, --output \'file\'', "output the results to 'file'"])
+    positionals.append(['    --smtp-server \'address\'', "set the SMTP server to 'address' (for sending mail)"])
+    positionals.append(['    --email-address \'address\'', "send output in an email to 'address'"])
+    positionals.append(['    --source-email', "send output in an email from 'address'"])
+
+    positionals_length = 0
+    for item in positionals:
+        if len(item[0]) > positionals_length:
+            positionals_length = len(item[0])
+
+    examples = []
+    examples.append([name + ' -r config.txt -I "https://intermapper.domain.com"',
+        '''Fetches the Radmind config from 'config.txt' and the InterMapper list
+        from 'https://intermapper.domain.com'.  This will output the list of
+        differences and then quit.'''])
+    examples.append([name + ' -r config.txt -i intermapper.txt -o output.txt',
+        '''Gets the InterMapper list from 'intermapper.txt' instead of online.
+        The list of differences is then outputted to 'output.txt' as well as to
+        the console.'''])
+    examples.append([name + ' -r config.txt -i intermapper.txt -o output.txt -qe',
+        '''After finding the differences, this will suppress console output (the
+        user will not see anything), but will place the output into a text file
+        'output.txt' and then attempt to email the list using the default email
+        settings.'''])
+    examples.append([name + ''' -r config.txt -i intermapper.txt --smtp-server "smtp.domain.com"
+--email-address "recipient@domain.com" --source-email "PROG@domain.com" -qdx''',
+        '''After finding the differences, this will suppress console output.
+        The list will be send via email from 'PROG@domain.com' to
+        'recipient@domain.com' using the SMTP server 'smtp.domain.com'.  The DNS
+        mappings will be left in their unaltered states
+        ('computer.tech.domain.com' vs 'computer'), and the program will display
+        a list of all variables used at the beginning of execution.'''])
+
+    print name
+    print desc
+    print
+
+    print "Optional arguments:"
+    for item in switches:
+        print "  {0:<{1}}  {2}".format(item[0], switches_length, item[1])
+    print
+    for item in positionals:
+        print "  {0:<{1}} ".format(item[0], positionals_length),
+
+        new_width = 80 - positionals_length - 4
+        text = textwrap.fill(textwrap.dedent(item[1]).strip(),
+                                  initial_indent='',
+                                  subsequent_indent='',
+                                  width=new_width)
+        lines = []
+        for line in text.split('\n'):
+            lines.append(line)
+        print lines[0]
+        for i in range (1, len(lines)):
+            print "{0:<{1}}{2}".format('', new_width - 2, lines[i])
+
+    print
+    print "Usage examples:"
+    for item in examples:
+        instruction = textwrap.fill(textwrap.dedent(item[0]).strip(),
+                            initial_indent='',
+                            subsequent_indent='  ',
+                            width=80)
+        text = textwrap.fill(textwrap.dedent(item[1]).strip().strip('   '),
+                            initial_indent='    ',
+                            subsequent_indent='    ',
+                            width=80)
+        print
+        print instruction
+        print
+        print text
+
+    sys.exit(quit_code)
 
 '''
 ################################################################################
@@ -186,338 +378,7 @@ def main ():
 
 '''
 ################################################################################
-PREPARE OUTPUT
-
-    Outputs the given lists in order, with their IP addresses and hostnames
-    spaced out for easy reading.  Any IP addresses with empty hostnames will
-    display "No DNS Entry" (optionally in yellow).
-################################################################################
-'''
-def prep_output (list1, list2):
-    global OUTPUT_TEXT
-    OUTPUT_TEXT = "Radmind items (" + str(len(list1)) + "):"
-    for item in list1:
-        if not item[1] == "False":
-            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), item[1])
-        else:
-            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), "")
-
-    OUTPUT_TEXT += '\n'
-    OUTPUT_TEXT += "\nInterMapper items (" + str(len(list2)) + "):"
-    for item in list2:
-        if not item[1] == "False":
-            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), item[1])
-        else:
-            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), "")
-
-'''
-################################################################################
-OUTPUT TO FILE
-
-    If the user specifies the '-o' option for output, this handles the
-    formatting and writing of that file.
-################################################################################
-'''
-# def file_output (list1, list2):
-def file_output ():
-    prompt = "Outputting to file [" + out_file + "]..."
-    pretty_print (prompt)
-
-    try:
-        sys.stdout = open (out_file, 'w')
-    except IOError as e:
-        pretty_print (prompt, 2)
-        qprint ()
-        qprint ("Error: " + e.strerror + ".")
-        sys.exit(21)
-    date = datetime.datetime.now().strftime('%Y-%m-%d at %X %Z')
-    print "Generated " + date
-    print
-    print OUTPUT_TEXT
-    sys.stdout = sys.__stdout__
-    pretty_print (prompt, 1)
-
-'''
-################################################################################
-EMAIL RESULTS
-
-    Sends the results (as they would appear in file_output()) to the email
-    address specified in email_address.
-################################################################################
-'''
-def send_email ():
-    prompt = "Sending email to [" + destination_email + "]..."
-    pretty_print (prompt)
-
-    # Get date
-    short_date = datetime.datetime.now().strftime('%A, %B %d')
-    full_date = datetime.datetime.now().strftime('%Y-%m-%d at %X %Z')
-
-    # Create message container
-    msg = MIMEText("Generated " + full_date + "\n\n" + OUTPUT_TEXT)
-    msg['Subject'] = "Radmind/Intermapper Differences " + short_date
-    msg['From'] = source_email
-    msg['To'] = destination_email
-
-    try:
-        s = smtplib.SMTP(smtp_server)
-        s.sendmail(msg['From'], [msg['To']], msg.as_string())
-        s.quit
-        pretty_print (prompt, 1)
-    except socket.error as e:
-        pretty_print (prompt, 2)
-        qprint ()
-        qprint ("Error: " + str(e) + ".")
-        sys.exit(30)
-
-'''
-################################################################################
-DEFINE GLOBAL VARIABLES
-
-    A few variables are used throughout this script, and they are defined here.
-################################################################################
-'''
-def set_gvars ():
-    # REGEX PATTERNS
-    global IP_PATTERN   # Generic IP address
-    global RM_PATTERN   # Radmind shorthand addresses: a.b.c.<d-e>
-    global RM_3         # Radmind three-deep match: 'a.b.c.'
-    global RM_FIRST     # Radmind first match: d in a.b.c.<d-e>
-    global RM_LAST      # Radmind last match: e in a.b.c.<d-e>
-
-    IP_PATTERN  = re.compile('\d+\.\d+\.\d+\.\d+')
-    RM_PATTERN  = re.compile('\d+\.\d+\.\d+\.[^\s)]+')
-    RM_3        = re.compile('\d+\.\d+\.\d+\.')
-    RM_FIRST    = re.compile('<(\d+)')
-    RM_LAST     = re.compile('(\d+)>')
-
-    # ADDRESSES
-    # Change these for your local environment!  It'll make your life easier.
-    global RADMIND_CONFIG       # Default location of Radmind config file
-    global INTERMAPPER_ADDRESS  # Default web address of InterMapper full list
-    global SMTP_SERVER          # Default SMTP server address
-    global DESTINATION_EMAIL    # Default send-to address for email
-    global SOURCE_EMAIL         # Default sent-from address for email
-
-    RADMIND_CONFIG      = "/radmind_server_root/radmind/config"
-    INTERMAPPER_ADDRESS = "https://intermapper.address/~admin/full_screen.html"
-    SMTP_SERVER         = "smtp@yourdomain"
-    DESTINATION_EMAIL   = "root@localhost"
-    SOURCE_EMAIL        = "radmind_intermapper_diff.py@localhost"
-
-    # OTHER
-    # DON'T CHANGE THESE
-    global VERSION      # Current version of the script
-    global OUTPUT_TEXT  # Stores all the text (so it can be outputted multiple
-                        # times easily)
-
-    VERSION     = "2.2.0"
-    OUTPUT_TEXT = ''
-
-'''
-################################################################################
-GET HOSTNAME
-
-    Takes an IP address and attempts to find a valid hostname for that address.
-    If none is found, False is stored in its place.
-################################################################################
-'''
-def get_host (ip):
-    try:
-        data = socket.gethostbyaddr(ip)
-        host = repr(data[0])
-        if dns_full:
-            return host
-        else:
-            return host.split('.')[0]
-    except Exception:
-        return False
-
-'''
-################################################################################
-RADMIND FILE
-
-    Scans the Radmind config file (usually located at /var/radmind/config) and
-    records all of the IP addresses that appear at the beginnings of lines, and
-    then returns those as a list.
-################################################################################
-'''
-## RADMIND ADDRESSES
-def get_radmind ():
-    matches = []
-    prompt = "Getting Radmind list from [" + rm_file + "]..."
-
-    pretty_print (prompt)
-    legit_file (rm_file, "rm", prompt)
-    addresses = []
-    with open(rm_file) as f:
-        for line in f:
-            result = RM_PATTERN.match(line)
-            if result:
-                addresses.append(result.group(0))
-
-    for item in addresses:
-        first = RM_FIRST.findall(item)
-        if first:
-            base = RM_3.findall(item)
-            last = RM_LAST.findall(item)
-            for x in range (int(first[0]), int(last[0]) + 1):
-                full = base[0] + str(x)
-                matches.append(full)
-        else:
-            if not re.search('-', item):
-                matches.append(item)
-
-    pretty_print (prompt, 1)
-
-    return matches
-
-'''
-################################################################################
-INTERMAPPER AUTHENTICATION
-
-    If InterMapper denies whitelist authentication (say, because you aren't on
-    the appropriate network), you may be able to attempt HTTPS authentication.
-    This attempts that authentication, as per the method described in the Python
-    documentation.
-################################################################################
-'''
-def im_authenticate ():
-    # Get username and password from the user.
-    qprint ("Please provide credentials.")
-    username = raw_input("  InterMapper Username: ")
-    password= getpass.getpass("  InterMapper Password: ", stream=sys.stderr)
-    prompt = "Attempting authentication..."
-    pretty_print (prompt)
-
-    # The following is the recommended method of authenticating to a secure
-    # website, as per the Python documentation at the time of this writing.
-    try:
-        password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-        password_mgr.add_password(None, im_address, username, password)
-        handler = urllib2.HTTPBasicAuthHandler(password_mgr)
-        opener = urllib2.build_opener(handler)
-        opener.open(im_address)
-        urllib2.install_opener(opener)
-        pretty_print(prompt, 1)
-    except:
-        pretty_print(prompt, 2)
-        qprint ("Something went wrong during authentication.  Quitting...")
-        sys.exit(11)
-
-'''
-################################################################################
-INTERMAPPER WEB
-
-    InterMapper has a webpage with all of the IP addresses for its monitored
-    devices.  Try to access that page and return a list containing all of those
-    IP addresses
-################################################################################
-'''
-def get_intermapper_web ():
-    prompt = "Getting InterMapper list from [" + im_address + "]..."
-    matches = []
-
-    pretty_print (prompt)
-    while True:
-        try:
-            page = urllib2.urlopen(im_address).read()
-            pretty_print (prompt, 1)
-            break;
-        except urllib2.HTTPError as e:
-            pretty_print (prompt, 2)
-            qprint ("HTTP Error", e.code)
-            message = "You are not authorized to access the addres: [" + im_address + "]"
-            pretty_print (message)
-            qprint ()
-            im_authenticate()
-        except urllib2.URLError as e:
-            pretty_print (prompt, 2)
-            message = "Error:  The address could not be accessed."
-            pretty_print (message)
-            qprint ()
-            qprint ("Reason: " + str(e.reason))
-            sys.exit(10)
-        except Exception as e:
-            pretty_print (prompt, 2)
-            print e
-            sys.exit(10)
-
-    matches = IP_PATTERN.findall(page)
-    return matches
-
-'''
-################################################################################
-INTERMAPPER FILE
-
-    In the event that a file is specified which contains all of the IP addresses
-    for InterMapper, this will try to record them all.
-################################################################################
-'''
-def get_intermapper_file ():
-    matches = []
-    prompt = "Getting InterMapper list from [" + im_file + "]..."
-
-    pretty_print (prompt)
-
-    legit_file (im_file, "im", prompt)
-    with open(im_file) as f:
-        matches = IP_PATTERN.findall(f.read())
-        pretty_print (prompt, 1)
-
-    return matches
-
-'''
-################################################################################
-FIND DISPARITY
-
-    Takes in two dictionaries, which are assumed to be formatted as:
-        {IP_Address, hostname}
-    and finds out which items exist in the first list, but not the second.
-################################################################################
-'''
-def differences (positive, negative):
-    different = []
-    for i in range (0, len(positive)):
-        update_progress(i/float(len(positive)))
-        if not (compare (positive[i][0], negative)):
-            different.append(positive[i])
-    update_progress()
-    return different
-
-def compare (value, list):
-    for other in list:
-        if value == other[0]:
-            return True
-    return False
-
-'''
-################################################################################
-CHECK FILE LEGITIMACY
-
-    To ensure that any of the specified files to be used are actually valid, we
-    try to open them up.  If it works, return.  Otherwise, give the error
-    message and quit.
-################################################################################
-'''
-def legit_file (location, switch, prompt = ''):
-    try:
-        with open(location) as f:
-            return
-    except IOError as e:
-        if prompt:
-            pretty_print (prompt, 2)
-        qprint ()
-        qprint ("Error: " + e.strerror + ".")
-        if switch == "im":
-            qprint ("Try using the [-i] switch to specify the file manually.")
-        elif switch == "rm":
-            qprint ("Try using the [-r] switch to specify the file manually.")
-        sys.exit(20)
-
-'''
-################################################################################
-PARSE FOR OPTIONS
+PARSE ARGUMENTS
 
     This takes in any command-line arguments and interprets them appropriately.
     Valid options include:
@@ -606,99 +467,290 @@ def parse_options ():
 
 '''
 ################################################################################
-USAGE
+GET HOSTNAME
 
-    The -h and --help options will display useful information on the various
-    options available to the user.
-
-    Primarily this function exists so that I can exert control over the
-    formatting of the output, since I didn't like how argparse handled the
-    output by default.
+    Takes an IP address and attempts to find a valid hostname for that address.
+    If none is found, False is stored in its place.
 ################################################################################
 '''
-def usage (quit_code=0):
-    name = os.path.basename(__file__)
+def get_host (ip):
+    try:
+        data = socket.gethostbyaddr(ip)
+        host = repr(data[0])
+        if dns_full:
+            return host
+        else:
+            return host.split('.')[0]
+    except Exception:
+        return False
 
-    description = '''Finds the IP addresses that exist in a Radmind
-configuration file and an InterMapper report and then determines the
-disparity between the two.  This information is then reported back to the
-user, and can optionally be stored in a text file or emailed.'''
+'''
+################################################################################
+RADMIND FILE
 
-    desc = textwrap.fill(textwrap.dedent(description).strip(),
-                         initial_indent='  ',
-                         subsequent_indent='  ',
-                         width=80)
+    Scans the Radmind config file (usually located at /var/radmind/config) and
+    records all of the IP addresses that appear at the beginnings of lines, and
+    then returns those as a list.
+################################################################################
+'''
+## RADMIND ADDRESSES
+def get_radmind ():
+    matches = []
+    prompt = "Getting Radmind list from [" + rm_file + "]..."
 
-    switches = []
-    switches.append(['-h, --help', "show this help message and exit"])
-    switches.append(['-v, --version', "display the current version and exit"])
-    switches.append(['-f, --full', "give full output"])
-    switches.append(['-q, --quiet', "suppress console output"])
-    switches.append(['-x, --explicit', "show all declared variables at run-time (overrides -q)"])
-    switches.append(['-d, --dns-full', "leave the full DNS names intact"])
-    switches.append(['-e, --email', "send an email to the default address"])
+    pretty_print (prompt)
+    legit_file (rm_file, "rm", prompt)
+    addresses = []
+    with open(rm_file) as f:
+        for line in f:
+            result = RM_PATTERN.match(line)
+            if result:
+                addresses.append(result.group(0))
 
-    switches_length = 0
-    for item in switches:
-        if len(item[0]) > switches_length:
-            switches_length = len(item[0])
+    for item in addresses:
+        first = RM_FIRST.findall(item)
+        if first:
+            base = RM_3.findall(item)
+            last = RM_LAST.findall(item)
+            for x in range (int(first[0]), int(last[0]) + 1):
+                full = base[0] + str(x)
+                matches.append(full)
+        else:
+            if not re.search('-', item):
+                matches.append(item)
 
-    positionals = []
-    positionals.append(['-r, --radmind-file \'file\'', "use 'file' as the Radmind configuration file"])
-    positionals.append(['-i, --intermapper-file \'file\'', "use 'file' as the InterMapper list of addresses"])
-    positionals.append(['-I, --intermapper-address \'address\'', "use 'address' as the InterMapper connection address (to get freshest results)"])
-    positionals.append(['-o, --output \'file\'', "output the results to 'file'"])
-    positionals.append(['    --smtp-server \'address\'', "set the SMTP server to 'address' (for sending mail)"])
-    positionals.append(['    --email-address \'address\'', "send output in an email to 'address'"])
-    positionals.append(['    --source-email', "send output in an email from 'address'"])
+    pretty_print (prompt, 1)
 
-    positionals_length = 0
-    for item in positionals:
-        if len(item[0]) > positionals_length:
-            positionals_length = len(item[0])
+    return matches
 
-    examples = []
-    examples.append(name + ''' -r config.txt -I "https://intermapper.domain.com"
+'''
+################################################################################
+INTERMAPPER FILE
 
-    Fetches the Radmind config from 'config.txt' and the InterMapper list from
-    'https://intermapper.domain.com'.  This will output the list of differences
-    and then quit.''')
-    examples.append(name + ''' -r config.txt -i intermapper.txt -o output.txt
+    In the event that a file is specified which contains all of the IP addresses
+    for InterMapper, this will try to record them all.
+################################################################################
+'''
+def get_intermapper_file ():
+    matches = []
+    prompt = "Getting InterMapper list from [" + im_file + "]..."
 
-    Gets the InterMapper list from 'intermapper.txt' instead of online.  The
-    list of differences is then outputted to 'output.txt' as well as to the
-    console.''')
+    pretty_print (prompt)
 
-    print name
-    print desc
+    legit_file (im_file, "im", prompt)
+    with open(im_file) as f:
+        matches = IP_PATTERN.findall(f.read())
+        pretty_print (prompt, 1)
+
+    return matches
+
+'''
+################################################################################
+INTERMAPPER WEB
+
+    InterMapper has a webpage with all of the IP addresses for its monitored
+    devices.  Try to access that page and return a list containing all of those
+    IP addresses
+################################################################################
+'''
+def get_intermapper_web ():
+    prompt = "Getting InterMapper list from [" + im_address + "]..."
+    matches = []
+
+    pretty_print (prompt)
+    while True:
+        try:
+            page = urllib2.urlopen(im_address).read()
+            pretty_print (prompt, 1)
+            break;
+        except urllib2.HTTPError as e:
+            pretty_print (prompt, 2)
+            qprint ("HTTP Error", e.code)
+            message = "You are not authorized to access the addres: [" + im_address + "]"
+            pretty_print (message)
+            qprint ()
+            im_authenticate()
+        except urllib2.URLError as e:
+            pretty_print (prompt, 2)
+            message = "Error:  The address could not be accessed."
+            pretty_print (message)
+            qprint ()
+            qprint ("Reason: " + str(e.reason))
+            sys.exit(10)
+        except Exception as e:
+            pretty_print (prompt, 2)
+            print e
+            sys.exit(10)
+
+    matches = IP_PATTERN.findall(page)
+    return matches
+
+'''
+################################################################################
+INTERMAPPER AUTHENTICATION
+
+    If InterMapper denies whitelist authentication (say, because you aren't on
+    the appropriate network), you may be able to attempt HTTPS authentication.
+    This attempts that authentication, as per the method described in the Python
+    documentation.
+################################################################################
+'''
+def im_authenticate ():
+    # Get username and password from the user.
+    qprint ("Please provide credentials.")
+    username = raw_input("  InterMapper Username: ")
+    password= getpass.getpass("  InterMapper Password: ", stream=sys.stderr)
+    prompt = "Attempting authentication..."
+    pretty_print (prompt)
+
+    # The following is the recommended method of authenticating to a secure
+    # website, as per the Python documentation at the time of this writing.
+    try:
+        password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        password_mgr.add_password(None, im_address, username, password)
+        handler = urllib2.HTTPBasicAuthHandler(password_mgr)
+        opener = urllib2.build_opener(handler)
+        opener.open(im_address)
+        urllib2.install_opener(opener)
+        pretty_print(prompt, 1)
+    except:
+        pretty_print(prompt, 2)
+        qprint ("Something went wrong during authentication.  Quitting...")
+        sys.exit(11)
+
+'''
+################################################################################
+FIND DISPARITY
+
+    Takes in two dictionaries, which are assumed to be formatted as:
+        {IP_Address, hostname}
+    and finds out which items exist in the first list, but not the second.
+################################################################################
+'''
+def differences (positive, negative):
+    different = []
+    for i in range (0, len(positive)):
+        update_progress(i/float(len(positive)))
+        if not (compare (positive[i][0], negative)):
+            different.append(positive[i])
+    update_progress()
+    return different
+
+def compare (value, list):
+    for other in list:
+        if value == other[0]:
+            return True
+    return False
+
+'''
+################################################################################
+PREPARE OUTPUT
+
+    Outputs the given lists in order, with their IP addresses and hostnames
+    spaced out for easy reading.  Any IP addresses with empty hostnames will
+    display "No DNS Entry" (optionally in yellow).
+################################################################################
+'''
+def prep_output (list1, list2):
+    global OUTPUT_TEXT
+    OUTPUT_TEXT = "Radmind items (" + str(len(list1)) + "):"
+    for item in list1:
+        if not item[1] == "False":
+            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), item[1])
+        else:
+            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), "")
+
+    OUTPUT_TEXT += '\n'
+    OUTPUT_TEXT += "\nInterMapper items (" + str(len(list2)) + "):"
+    for item in list2:
+        if not item[1] == "False":
+            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), item[1])
+        else:
+            OUTPUT_TEXT += "\n  {0:<{1}} {2}".format(item[0], (22), "")
+
+'''
+################################################################################
+OUTPUT TO FILE
+
+    If the user specifies the '-o' option for output, this handles the
+    formatting and writing of that file.
+################################################################################
+'''
+# def file_output (list1, list2):
+def file_output ():
+    prompt = "Outputting to file [" + out_file + "]..."
+    pretty_print (prompt)
+
+    try:
+        sys.stdout = open (out_file, 'w')
+    except IOError as e:
+        pretty_print (prompt, 2)
+        qprint ()
+        qprint ("Error: " + e.strerror + ".")
+        sys.exit(21)
+    date = datetime.datetime.now().strftime('%Y-%m-%d at %X %Z')
+    print "Generated " + date
     print
+    print OUTPUT_TEXT
+    sys.stdout = sys.__stdout__
+    pretty_print (prompt, 1)
 
-    print "Optional arguments:"
-    for item in switches:
-        print "  {0:<{1}}  {2}".format(item[0], switches_length, item[1])
-    print
-    for item in positionals:
-        print "  {0:<{1}} ".format(item[0], positionals_length),
+'''
+################################################################################
+EMAIL RESULTS
 
-        new_width = 80 - positionals_length - 4
-        help_text = textwrap.fill(textwrap.dedent(item[1]).strip(),
-                                  initial_indent='',
-                                  subsequent_indent='',
-                                  width=new_width)
-        lines = []
-        for line in help_text.split('\n'):
-            lines.append(line)
-        print lines[0]
-        for i in range (1, len(lines)):
-            print "{0:<{1}}{2}".format('', new_width - 2, lines[i])
+    Sends the results (as they would appear in file_output()) to the email
+    address specified in email_address.
+################################################################################
+'''
+def send_email ():
+    prompt = "Sending email to [" + destination_email + "]..."
+    pretty_print (prompt)
 
-    print
-    print "Usage examples:"
-    for item in examples:
-        print
-        print item
+    # Get date
+    short_date = datetime.datetime.now().strftime('%A, %B %d')
+    full_date = datetime.datetime.now().strftime('%Y-%m-%d at %X %Z')
 
-    sys.exit(quit_code)
+    # Create message container
+    msg = MIMEText("Generated " + full_date + "\n\n" + OUTPUT_TEXT)
+    msg['Subject'] = "Radmind/Intermapper Differences " + short_date
+    msg['From'] = source_email
+    msg['To'] = destination_email
+
+    try:
+        s = smtplib.SMTP(smtp_server)
+        s.sendmail(msg['From'], [msg['To']], msg.as_string())
+        s.quit
+        pretty_print (prompt, 1)
+    except socket.error as e:
+        pretty_print (prompt, 2)
+        qprint ()
+        qprint ("Error: " + str(e) + ".")
+        sys.exit(30)
+
+'''
+################################################################################
+CHECK FILE LEGITIMACY
+
+    To ensure that any of the specified files to be used are actually valid, we
+    try to open them up.  If it works, return.  Otherwise, give the error
+    message and quit.
+################################################################################
+'''
+def legit_file (location, switch, prompt = ''):
+    try:
+        with open(location) as f:
+            return
+    except IOError as e:
+        if prompt:
+            pretty_print (prompt, 2)
+        qprint ()
+        qprint ("Error: " + e.strerror + ".")
+        if switch == "im":
+            qprint ("Try using the [-i] switch to specify the file manually.")
+        elif switch == "rm":
+            qprint ("Try using the [-r] switch to specify the file manually.")
+        sys.exit(20)
 
 '''
 ################################################################################
