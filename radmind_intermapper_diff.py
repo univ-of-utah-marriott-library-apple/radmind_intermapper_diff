@@ -58,7 +58,7 @@ Usage examples:
 
 %(PROG) -r config.txt -i intermapper.txt --smtp-server "smtp.domain.com"
   --email-address "recipient@domain.com" --source-email "PROG@domain.com" -qdx
-  
+
     After finding the differences, this will suppress console output.  The list
     will be send via email from 'PROG@domain.com' to 'recipient@domain.com'
     using the SMTP server 'smtp.domain.com'.  The DNS mappings will be left in
@@ -121,20 +121,8 @@ DEFINE GLOBAL VARIABLES
 ################################################################################
 '''
 def set_gvars ():
-    # REGEX PATTERNS
-    global IP_PATTERN   # Generic IP address
-    global RM_PATTERN   # Radmind shorthand addresses: a.b.c.<d-e>
-    global RM_3         # Radmind three-deep match: 'a.b.c.'
-    global RM_FIRST     # Radmind first match: d in a.b.c.<d-e>
-    global RM_LAST      # Radmind last match: e in a.b.c.<d-e>
-
-    IP_PATTERN  = re.compile('\d+\.\d+\.\d+\.\d+')
-    RM_PATTERN  = re.compile('\d+\.\d+\.\d+\.[^\s)]+')
-    RM_3        = re.compile('\d+\.\d+\.\d+\.')
-    RM_FIRST    = re.compile('<(\d+)')
-    RM_LAST     = re.compile('(\d+)>')
-
-    # ADDRESSES
+    ''' USER CONFIGURABLE '''
+    '''###################'''
     # Change these for your local environment!  It'll make your life easier.
     global RADMIND_CONFIG       # Default location of Radmind config file
     global INTERMAPPER_ADDRESS  # Default web address of InterMapper full list
@@ -148,13 +136,28 @@ def set_gvars ():
     DESTINATION_EMAIL   = "root@localhost"
     SOURCE_EMAIL        = "radmind_intermapper_diff.py@localhost"
 
+    ''' DON'T CHANGE THESE UNLESS YOU KNOW WHAT YOU'RE DOING!!! '''
+    '''#########################################################'''
+    # REGEX PATTERNS
+    global IP_PATTERN   # Generic IP address
+    global RM_PATTERN   # Radmind shorthand addresses: a.b.c.<d-e>
+    global RM_3         # Radmind three-deep match: 'a.b.c.'
+    global RM_FIRST     # Radmind first match: d in a.b.c.<d-e>
+    global RM_LAST      # Radmind last match: e in a.b.c.<d-e>
+
+    IP_PATTERN  = re.compile('\d+\.\d+\.\d+\.\d+')
+    RM_PATTERN  = re.compile('\d+\.\d+\.\d+\.[^\s)]+')
+    RM_3        = re.compile('\d+\.\d+\.\d+\.')
+    RM_FIRST    = re.compile('<(\d+)')
+    RM_LAST     = re.compile('(\d+)>')
+
     # OTHER
     # DON'T CHANGE THESE
     global VERSION      # Current version of the script
     global OUTPUT_TEXT  # Stores all the text (so it can be outputted multiple
                         # times easily)
 
-    VERSION     = "2.2.2"
+    VERSION     = "2.2.3"
     OUTPUT_TEXT = ''
 
 '''
@@ -171,6 +174,10 @@ USAGE
 '''
 def usage (quit_code=0):
     name = os.path.basename(__file__)
+    print name + " " + VERSION
+
+    if version:
+        sys.exit(0)
 
     description = '''Finds the IP addresses that exist in a Radmind
 configuration file and an InterMapper report and then determines the
@@ -233,7 +240,6 @@ user, and can optionally be stored in a text file or emailed.'''
         ('computer.tech.domain.com' vs 'computer'), and the program will display
         a list of all variables used at the beginning of execution.'''])
 
-    print name
     print desc
     print
 
@@ -404,10 +410,9 @@ def parse_options ():
     parser = argparse.ArgumentParser(add_help=False)
 
     parser.add_argument("-h", "--help",
-                        action=usage())
+                        action='store_true')
     parser.add_argument("-v", "--version",
-                        action='version',
-                        version='%(prog)s ' + VERSION)
+                        action='store_true')
     parser.add_argument("-f", "--full",
                         action="store_true")
     parser.add_argument("-q", "--quiet",
@@ -425,7 +430,7 @@ def parse_options ():
                         dest='rm_file',
                         default=RADMIND_CONFIG)
     parser.add_argument("-i", "--intermapper-file",
-                        metavar='\'file\'',
+                        dest='im_file',
                         default=None)
     parser.add_argument("-I", "--intermapper-address",
                         dest='im_address',
@@ -449,6 +454,7 @@ def parse_options ():
     # If the user specified the explicit option, show all of the variables used.
     if explicit:
         print
+        print '-' * 80
         print "These variables were used:"
         print "  {:20} : {}".format('full', full)
         print "  {:20} : {}".format('quiet', quiet)
@@ -463,7 +469,12 @@ def parse_options ():
         print "  {:20} : {}".format('smtp_server', smtp_server)
         print "  {:20} : {}".format('destination_email', destination_email)
         print "  {:20} : {}".format('source_email', source_email)
+        print '-' * 80
         print
+
+    if help:
+        usage()
+        sys.exit(0)
 
 '''
 ################################################################################
