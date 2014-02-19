@@ -100,6 +100,7 @@ IMPORTS
 import argparse
 import getpass
 import datetime
+import logging
 import math
 import os
 import re
@@ -129,12 +130,16 @@ def set_gvars ():
     global SMTP_SERVER          # Default SMTP server address
     global DESTINATION_EMAIL    # Default send-to address for email
     global SOURCE_EMAIL         # Default sent-from address for email
+    global LOG_PATH             # Location where the log will be written
+    global LOG_FILE             # The name of the actual log file
 
     RADMIND_CONFIG      = "/radmind_server_root/radmind/config"
     INTERMAPPER_ADDRESS = "https://intermapper.address/~admin/full_screen.html"
     SMTP_SERVER         = "smtp@yourdomain"
     DESTINATION_EMAIL   = "root@localhost"
     SOURCE_EMAIL        = "radmind_intermapper_diff.py@localhost"
+    LOG_PATH            = "/var/log/"
+    LOG_FILE            = "radmind_intermapper_diff.log"
 
     ''' DON'T CHANGE THESE UNLESS YOU KNOW WHAT YOU'RE DOING!!! '''
     '''#########################################################'''
@@ -157,8 +162,9 @@ def set_gvars ():
     global OUTPUT_TEXT  # Stores all the text (so it can be outputted multiple
                         # times easily)
 
-    VERSION     = "2.2.3"
+    VERSION     = "2.2.4"
     OUTPUT_TEXT = ''
+
 
 '''
 ################################################################################
@@ -192,6 +198,7 @@ user, and can optionally be stored in a text file or emailed.'''
     switches = []
     switches.append(['-h, --help', "show this help message and exit"])
     switches.append(['-v, --version', "display the current version and exit"])
+    switches.append(['-V, --verbose', "increase logging verbosity"])
     switches.append(['-f, --full', "give full output"])
     switches.append(['-q, --quiet', "suppress console output"])
     switches.append(['-x, --explicit', "show all declared variables at run-time (overrides -q)"])
@@ -210,7 +217,8 @@ user, and can optionally be stored in a text file or emailed.'''
     positionals.append(['-o, --output \'file\'', "output the results to 'file'"])
     positionals.append(['    --smtp-server \'address\'', "set the SMTP server to 'address' (for sending mail)"])
     positionals.append(['    --email-address \'address\'', "send output in an email to 'address'"])
-    positionals.append(['    --source-email', "send output in an email from 'address'"])
+    positionals.append(['    --source-email \'address\'', "send output in an email from 'address'"])
+    positionals.append(['    --log-path \'path\'', "send logging output to a file in 'path'"])
 
     positionals_length = 0
     for item in positionals:
@@ -288,6 +296,7 @@ MAIN
     1.      Initialization
     1.1.      Set the global variables
     1.2.      Parse for command line options
+    1.3.      Build logging systems
     2.      Get address lists
     2.1.      Radmind addresses
     2.2.      InterMapper addresses
@@ -309,6 +318,7 @@ def main ():
     # Initialization
     set_gvars()
     parse_options()
+    build_loggers()
 
     # Get the list of Radmind IPs
     rm_list = get_radmind()
@@ -322,22 +332,22 @@ def main ():
         im_list = get_intermapper_web()
 
     # Get the hostnames for Radmind IPs
-    qprint ("Getting Radmind hostnames...")
     rm_stuff = {}
     for i in range(0, len(rm_list)):
         update_progress(i/float(len(rm_list)))
         item = rm_list[i]
         rm_stuff[item] = str(get_host(item)).replace("'", "")
     update_progress()
+    logger.info("Radmind hostnames acquired.")
 
     # Get the hostnames for InterMapper IPs
-    qprint ("Getting InterMapper hostnames...")
     im_stuff = {}
     for i in range(0, len(im_list)):
         update_progress(i/float(len(im_list)))
         item = im_list[i]
         im_stuff[item] = str(get_host(item)).replace("'", "")
     update_progress()
+    logger.info("InterMapper hostnames acquired.")
 
     '''
     Sort the IP addresses.
@@ -357,14 +367,16 @@ def main ():
         im_sorted = sorted(im_stuff.items(),
                            key=lambda item: socket.inet_aton(item[0]))
     except:
+        logger.error("IP sorting failed")
         traceback.print_exc(file=sys.stdout)
+    logger.info("IP addresses sorted.")
 
     # Find the Radmind positive disparities
-    qprint ("Finding Radmind positive disparity...")
     rm_diff = differences(rm_sorted, im_sorted)
+    logger.info("Found Radmind positive disparity.")
     # Find the InterMapper positive disparities
-    qprint ("Finding InterMapper positive disparity...")
     im_diff = differences(im_sorted, rm_sorted)
+    logger.info("Found InterMapper positive disparity.")
 
     prep_output (rm_diff, im_diff)
 
@@ -375,7 +387,7 @@ def main ():
         send_email ()
 
     if not quiet:
-        qprint ("\n")
+        print "\n"
         if full:
             prep_output (rm_sorted, im_sorted)
             print (OUTPUT_TEXT)
@@ -390,6 +402,7 @@ PARSE ARGUMENTS
     Valid options include:
         -h, --help
         -v, --version
+        -V, --verbose
         -f, --full
         -q, --quiet
         -x, --explicit
@@ -403,6 +416,7 @@ PARSE ARGUMENTS
             --smtp-server
             --email-address
             --source-email
+            --log-path
 ################################################################################
 '''
 def parse_options ():
@@ -413,6 +427,9 @@ def parse_options ():
                         action='store_true')
     parser.add_argument("-v", "--version",
                         action='store_true')
+    parser.add_argument("-V", "--verbose",
+                        dest='verbosity',
+                        action="count")
     parser.add_argument("-f", "--full",
                         action="store_true")
     parser.add_argument("-q", "--quiet",
@@ -447,6 +464,9 @@ def parse_options ():
     parser.add_argument("--source-email",
                         dest='source_email',
                         default=SOURCE_EMAIL)
+    parser.add_argument("--log-path",
+                        dest='log_dest',
+                        default=LOG_PATH)
 
     # Make all arguments globally accessible
     globals().update(vars(parser.parse_args()))
@@ -456,6 +476,7 @@ def parse_options ():
         print
         print '-' * 80
         print "These variables were used:"
+        print "  {:20} : {}".format('verbosity', verbosity)
         print "  {:20} : {}".format('full', full)
         print "  {:20} : {}".format('quiet', quiet)
         print "  {:20} : {}".format('explicit', explicit)
@@ -469,12 +490,72 @@ def parse_options ():
         print "  {:20} : {}".format('smtp_server', smtp_server)
         print "  {:20} : {}".format('destination_email', destination_email)
         print "  {:20} : {}".format('source_email', source_email)
+        print "  {:20} : {}".format('log_dest', log_dest)
         print '-' * 80
         print
 
     if help:
         usage()
         sys.exit(0)
+
+'''
+################################################################################
+LOGGING SET-UP
+
+    Creates the logger to be used throughout.  One logger is created which
+    streams its information to the console, and the other writes to a file.
+################################################################################
+'''
+def build_loggers ():
+    # If the logging destination path doesn't end in a slash... fix it.
+    global log_dest
+    if not log_dest.endswith('/'):
+        log_dest = log_dest + '/'
+
+    # Set the file logging verbosity.
+    if verbosity == 0:
+        file_logging_level = logging.INFO
+    elif verbosity == 1:
+        file_logging_level = logging.DEBUG
+    elif verbosity > 1:
+        file_logging_level = 0
+    else:
+        file_logging_level = logging.INFO
+
+    # Set the console logging verbosity.
+    if quiet:
+        console_logging_level = logging.WARNING
+    else:
+        console_logging_level = logging.INFO
+
+    # Create the root logger.  These are the settings for console output.
+    logging.basicConfig(level=console_logging_level, format='%(message)s')
+    global logger
+    logger = logging.getLogger(__name__)
+
+    # Check if we have write permissions to the directory.  If not, don't write
+    # the logs out to a file.  If yes, write to the file and output simplified
+    # information to the console.
+    if os.access(log_dest, os.W_OK):
+        # Prepends with a line and the date.  Useful for searching through the
+        # log file.
+        nfh = logging.FileHandler(log_dest + LOG_FILE, mode='a')
+        nfh_formatter = logging.Formatter('%(message)s')
+        nfh.setFormatter(nfh_formatter)
+        logger.addHandler(nfh)
+        date = datetime.datetime.now().strftime('%a %b %d at %H:%M %Y')
+        logger.info("-" * 80)
+        logger.info(date)
+        logger.removeHandler(nfh)
+
+        # Set the file output handler appropriately now.
+        fh = logging.FileHandler(log_dest + LOG_FILE, mode='a')
+        fh_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+        fh.setFormatter(fh_formatter)
+        fh.setLevel(file_logging_level)
+        logger.addHandler(fh)
+    else:
+        print "Logging will not be outputted to a file.  Check your variables."
 
 '''
 ################################################################################
@@ -489,10 +570,13 @@ def get_host (ip):
         data = socket.gethostbyaddr(ip)
         host = repr(data[0])
         if dns_full:
-            return host
+            hostname = host
         else:
-            return host.split('.')[0]
+            hostname = host.split('.')[0]
+        logging.debug(ip + " => " + hostname)
+        return hostname
     except Exception:
+        logging.debug(ip + " => ")
         return False
 
 '''
@@ -526,12 +610,15 @@ def get_radmind ():
             for x in range (int(first[0]), int(last[0]) + 1):
                 full = base[0] + str(x)
                 matches.append(full)
+                logging.debug("Radmind matches += " + full)
         else:
             if not re.search('-', item):
                 matches.append(item)
+                logging.debug("Radmind matches += " + item)
 
     pretty_print (prompt, 1)
 
+    logger.info("Got Radmind list from [" + rm_file + "].")
     return matches
 
 '''
@@ -551,8 +638,11 @@ def get_intermapper_file ():
     legit_file (im_file, "im", prompt)
     with open(im_file) as f:
         matches = IP_PATTERN.findall(f.read())
+        for item in matches:
+            logging.debug("InterMapper matches += " + item)
         pretty_print (prompt, 1)
 
+    logger.info("Got InterMapper list from [" + im_file + "].")
     return matches
 
 '''
@@ -575,25 +665,27 @@ def get_intermapper_web ():
             pretty_print (prompt, 1)
             break;
         except urllib2.HTTPError as e:
+            logger.warning("Issue authorizing to [" + im_address + "].")
+            logger.warning("HTTP Error " + str(e.code))
             pretty_print (prompt, 2)
-            qprint ("HTTP Error", e.code)
-            message = "You are not authorized to access the addres: [" + im_address + "]"
+            message = "Not authorized to access the addres: [" + im_address + "]"
             pretty_print (message)
-            qprint ()
             im_authenticate()
         except urllib2.URLError as e:
+            logger.error("Could not connect to [" + im_address + "].")
+            logger.error("Reason: " + str(e.reason))
             pretty_print (prompt, 2)
             message = "Error:  The address could not be accessed."
             pretty_print (message)
-            qprint ()
-            qprint ("Reason: " + str(e.reason))
             sys.exit(10)
         except Exception as e:
+            logger.error("Could not connect to [" + im_address + "].")
             pretty_print (prompt, 2)
             print e
             sys.exit(10)
 
     matches = IP_PATTERN.findall(page)
+    logger.info("Got InterMapper list from [" + im_address + "].")
     return matches
 
 '''
@@ -608,7 +700,7 @@ INTERMAPPER AUTHENTICATION
 '''
 def im_authenticate ():
     # Get username and password from the user.
-    qprint ("Please provide credentials.")
+    print "Please provide credentials."
     username = raw_input("  InterMapper Username: ")
     password= getpass.getpass("  InterMapper Password: ", stream=sys.stderr)
     prompt = "Attempting authentication..."
@@ -626,8 +718,9 @@ def im_authenticate ():
         pretty_print(prompt, 1)
     except:
         pretty_print(prompt, 2)
-        qprint ("Something went wrong during authentication.  Quitting...")
+        logger.error("InterMapper authentication failed.")
         sys.exit(11)
+    logger.info("Authented to [" + im_address + "].")
 
 '''
 ################################################################################
@@ -695,9 +788,8 @@ def file_output ():
     try:
         sys.stdout = open (out_file, 'w')
     except IOError as e:
+        logger.error("Error writing to file: " + e.strerror)
         pretty_print (prompt, 2)
-        qprint ()
-        qprint ("Error: " + e.strerror + ".")
         sys.exit(21)
     date = datetime.datetime.now().strftime('%Y-%m-%d at %X %Z')
     print "Generated " + date
@@ -705,6 +797,7 @@ def file_output ():
     print OUTPUT_TEXT
     sys.stdout = sys.__stdout__
     pretty_print (prompt, 1)
+    logger.info("Output to file [" + out_file + "].")
 
 '''
 ################################################################################
@@ -735,9 +828,13 @@ def send_email ():
         pretty_print (prompt, 1)
     except socket.error as e:
         pretty_print (prompt, 2)
-        qprint ()
-        qprint ("Error: " + str(e) + ".")
+        logger.error("Could not send email.")
+        logger.error(str(e))
         sys.exit(30)
+    logger.info(("Sent output via email.\n"
+                 + "{0:24}\tSMTP: " + smtp_server + "\n"
+                 + "{0:24}\tFrom: " + source_email + "\n"
+                 + "{0:24}\tTo:   " + destination_email).format(''))
 
 '''
 ################################################################################
@@ -753,14 +850,14 @@ def legit_file (location, switch, prompt = ''):
         with open(location) as f:
             return
     except IOError as e:
+        logger.error("Unable to open file [" + location + "].")
+        logger.error("Error " + e.strerror)
         if prompt:
             pretty_print (prompt, 2)
-        qprint ()
-        qprint ("Error: " + e.strerror + ".")
         if switch == "im":
-            qprint ("Try using the [-i] switch to specify the file manually.")
+            logger.error("Try using the [-i] switch to specify the file manually.")
         elif switch == "rm":
-            qprint ("Try using the [-r] switch to specify the file manually.")
+            logger.error("Try using the [-r] switch to specify the file manually.")
         sys.exit(20)
 
 '''

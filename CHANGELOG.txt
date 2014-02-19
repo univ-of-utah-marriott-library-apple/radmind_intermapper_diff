@@ -73,3 +73,14 @@ CHANGELOG
 
 2.2.1 - February 12, 2014
 	* Completely changed help text formatting
+
+2.2.2 - February 13, 2014
+	* Updated usage instructions
+	* Rearranged code
+
+2.2.3 - February 14, 2014
+	* Minor formatting updates
+
+2.2.4 - February 18, 2014
+	* Began implementing logging
+	* TO-DO: Remove all regular output; replace with logging features
